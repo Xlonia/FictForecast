@@ -20,6 +20,14 @@ const WORLD_DEFAULTS := {
 	"seed": "",
 	"base_times": [],  # [{ "id": String, "offset_minutes": int }] 基准时间（时区偏差分钟，投射到 0° 经度）
 	"base_dates": [],  # [{ "id": String, "offset_days": int }] 基准日期（与现实日期差天数）
+	# —— 波动与日照参数（m2 批复：参数摆位，数值先给默认，具体定值后续再调）——
+	"axial_tilt_deg": 23.44,     # 地轴倾斜角：日照随纬度/季节分布的基础
+	"day_hours": 24.0,           # 一日小时数（自定义世界昼夜基准）
+	"month_temp_sigma": 2.2,     # 月内每日温度波动幅度 σ（℃）——“这个月每天正负多少度”
+	"month_smoothing": 0.5,      # 月内噪音平滑度 0..1——“让它稳定或者平滑一些”
+	"monthly_total_strength": 0.0,   # 月总量对账强度 0..1——“凑齐降水和月积温”（引擎未实装，先摆位）
+	"phenomena_spread_days": 7.0,    # 现象出现日期离散（正态 σ·天）——“分布系数由用户来调整”
+	"annual_compensation": 0.0,      # 年度补偿强度 0..1——异常雨热三步中和的 AB/B 步骤（引擎未实装，先摆位）
 }
 
 const CITY_DEFAULTS := {
@@ -91,6 +99,24 @@ static func load_city(id: String) -> Dictionary:
 
 static func save_city(id: String, data: Dictionary) -> Error:
 	return _save_json(CITIES_DIR.path_join(id + ".json"), data)
+
+
+## 气候现象模板（挂在世界上；城市只能被影响，不参与现象的种子——批复口径）。
+## 文件：Worlds/<世界ID>.phenomena.json；结构见编辑器「现象」页与
+## docs/项目路线图-2026-11-22.md 的草案。
+const PHENOMENA_DEFAULTS := {"phenomena": []}
+
+
+static func phenomena_path(world_id: String) -> String:
+	return WORLDS_DIR.path_join(world_id + ".phenomena.json")
+
+
+static func load_phenomena(world_id: String) -> Dictionary:
+	return _load_json(phenomena_path(world_id), PHENOMENA_DEFAULTS)
+
+
+static func save_phenomena(world_id: String, data: Dictionary) -> Error:
+	return _save_json(phenomena_path(world_id), data)
 
 
 static func load_localization() -> Dictionary:

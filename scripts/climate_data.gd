@@ -3,12 +3,15 @@ extends RefCounted
 ## 逐月气候表（CSV）的读取与查询。
 ##
 ## 期望列排布（自动识别，宽容处理）：
-##   · 键值在首列：键名, 1月值 … 12月值 [, 注释]
-##   · 键值在末列：1月值 … 12月值, 键名 [, 注释]   ← 当前 Climate/*.csv 的排布
+##   · 键值在首列：键名, 1月值 … 12月值 [, 注释]   ← m2 起 myksolonia.csv 的排布（英文语义 id + 中文注释）
+##   · 键值在末列：1月值 … 12月值, 键名 [, 注释]   ← 旧排布（lioepprosia.csv 等）
 ## 首行是月份表头（12 个数据恰为 1…12）时自动跳过；注释列自动忽略。
+## 空键行（如「气候表现-*」权重）用注释列名称兜底保留。
 ## 数值允许带引号与首尾空白；某行 12 个月值不全时跳过并计数，不中断加载。
 
-## 本地化键名 → 引擎语义键
+## 键名 → 引擎语义键。两套并列：
+## · 中文键（旧版 CSV / 注释列名）
+## · 英文语义 id（m2 起 Climate/*.csv 第一列，见《1122Classic0.0.1 m2意见》的数据处理规则）
 const KEY_MAP := {
 	"平均日均温": "mean_temp",
 	"平均降水量": "precip",
@@ -20,6 +23,16 @@ const KEY_MAP := {
 	"平均降水天数": "rain_days",
 	"平均降雪天数": "snow_days",
 	"平均湿度": "humidity",
+	"tmean": "mean_temp",
+	"rmean": "precip",
+	"thigh": "high_temp",
+	"tlow": "low_temp",
+	"trecordh": "record_high",
+	"trecordl": "record_low",
+	"sunlight_h": "sunshine",
+	"raint": "rain_days",
+	"snowt": "snow_days",
+	"humidity": "humidity",
 }
 
 var city_name := ""
@@ -60,8 +73,14 @@ static func _parse_row(cells: PackedStringArray, data: ClimateData) -> bool:
 		key = cleaned[12]
 		for m in range(12):
 			vals.append(_to_float(cleaned[m]))
-	if key.is_empty() or key == "月份" or _looks_like_month_header(vals):
+	if key == "月份" or _looks_like_month_header(vals):
 		return false
+	if key.is_empty():
+		# 空键行（如「气候表现-*」权重行）：用注释列名称兜底保留，无注释才丢弃
+		var comment := cleaned[13] if cleaned.size() > 13 else ""
+		if comment.is_empty():
+			return false
+		key = comment
 	for v in vals:
 		if is_nan(v):
 			return false  # 12 个月值必须齐全

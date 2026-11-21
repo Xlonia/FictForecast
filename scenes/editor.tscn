@@ -103,6 +103,104 @@ theme_override_constants/separation = 4
 layout_mode = 2
 text = "＋ 添加基准日期"
 
+[node name="ParamSection" type="VBoxContainer" parent="Root/Column/Tabs/WorldTab/Form"]
+layout_mode = 2
+theme_override_constants/separation = 4
+
+[node name="Title" type="Label" parent="Root/Column/Tabs/WorldTab/Form/ParamSection"]
+layout_mode = 2
+theme_override_colors/font_color = Color(0.62, 0.69, 0.8, 1)
+text = "波动与日照参数（m2 批复：参数摆位，默认值即草案，引擎逐步消费）"
+
+[node name="Grid" type="GridContainer" parent="Root/Column/Tabs/WorldTab/Form/ParamSection"]
+layout_mode = 2
+columns = 4
+theme_override_constants/h_separation = 12
+theme_override_constants/v_separation = 4
+
+[node name="L1" type="Label" parent="Root/Column/Tabs/WorldTab/Form/ParamSection/Grid"]
+layout_mode = 2
+theme_override_colors/font_color = Color(0.62, 0.69, 0.8, 1)
+text = "地轴倾斜角 axial_tilt_deg"
+
+[node name="WAxialSpin" type="SpinBox" parent="Root/Column/Tabs/WorldTab/Form/ParamSection/Grid"]
+custom_minimum_size = Vector2(110, 0)
+layout_mode = 2
+max_value = 90.0
+step = 0.01
+value = 23.44
+
+[node name="L2" type="Label" parent="Root/Column/Tabs/WorldTab/Form/ParamSection/Grid"]
+layout_mode = 2
+theme_override_colors/font_color = Color(0.62, 0.69, 0.8, 1)
+text = "一日小时数 day_hours"
+
+[node name="WDayHoursSpin" type="SpinBox" parent="Root/Column/Tabs/WorldTab/Form/ParamSection/Grid"]
+custom_minimum_size = Vector2(110, 0)
+layout_mode = 2
+min_value = 1.0
+max_value = 100.0
+step = 0.1
+value = 24.0
+
+[node name="L3" type="Label" parent="Root/Column/Tabs/WorldTab/Form/ParamSection/Grid"]
+layout_mode = 2
+theme_override_colors/font_color = Color(0.62, 0.69, 0.8, 1)
+text = "月内温度波动 σ month_temp_sigma"
+
+[node name="WTempSigmaSpin" type="SpinBox" parent="Root/Column/Tabs/WorldTab/Form/ParamSection/Grid"]
+custom_minimum_size = Vector2(110, 0)
+layout_mode = 2
+max_value = 20.0
+step = 0.1
+value = 2.2
+
+[node name="L4" type="Label" parent="Root/Column/Tabs/WorldTab/Form/ParamSection/Grid"]
+layout_mode = 2
+theme_override_colors/font_color = Color(0.62, 0.69, 0.8, 1)
+text = "月内平滑 month_smoothing"
+
+[node name="WSmoothSpin" type="SpinBox" parent="Root/Column/Tabs/WorldTab/Form/ParamSection/Grid"]
+custom_minimum_size = Vector2(110, 0)
+layout_mode = 2
+max_value = 1.0
+step = 0.05
+value = 0.5
+
+[node name="L5" type="Label" parent="Root/Column/Tabs/WorldTab/Form/ParamSection/Grid"]
+layout_mode = 2
+theme_override_colors/font_color = Color(0.62, 0.69, 0.8, 1)
+text = "月总量对账强度 monthly_total_strength"
+
+[node name="WTotalSpin" type="SpinBox" parent="Root/Column/Tabs/WorldTab/Form/ParamSection/Grid"]
+custom_minimum_size = Vector2(110, 0)
+layout_mode = 2
+max_value = 1.0
+step = 0.05
+
+[node name="L6" type="Label" parent="Root/Column/Tabs/WorldTab/Form/ParamSection/Grid"]
+layout_mode = 2
+theme_override_colors/font_color = Color(0.62, 0.69, 0.8, 1)
+text = "现象日期离散 σ·天 phenomena_spread_days"
+
+[node name="WSpreadSpin" type="SpinBox" parent="Root/Column/Tabs/WorldTab/Form/ParamSection/Grid"]
+custom_minimum_size = Vector2(110, 0)
+layout_mode = 2
+max_value = 31.0
+step = 0.5
+value = 7.0
+
+[node name="L7" type="Label" parent="Root/Column/Tabs/WorldTab/Form/ParamSection/Grid"]
+layout_mode = 2
+theme_override_colors/font_color = Color(0.62, 0.69, 0.8, 1)
+text = "年度补偿强度 annual_compensation"
+
+[node name="WCompSpin" type="SpinBox" parent="Root/Column/Tabs/WorldTab/Form/ParamSection/Grid"]
+custom_minimum_size = Vector2(110, 0)
+layout_mode = 2
+max_value = 1.0
+step = 0.05
+
 [node name="CityTab" type="VBoxContainer" parent="Root/Column/Tabs"]
 layout_mode = 2
 theme_override_constants/separation = 8
@@ -267,6 +365,316 @@ theme_override_constants/separation = 4
 [node name="AddBtn" type="Button" parent="Root/Column/Tabs/CityTab/Scroll/Form/EffectSection"]
 layout_mode = 2
 text = "＋ 添加气象效果"
+
+[node name="PhenTab" type="VBoxContainer" parent="Root/Column/Tabs"]
+layout_mode = 2
+theme_override_constants/separation = 8
+
+[node name="PhenTop" type="HBoxContainer" parent="Root/Column/Tabs/PhenTab"]
+layout_mode = 2
+theme_override_constants/separation = 8
+
+[node name="PhenWorldPick" type="OptionButton" parent="Root/Column/Tabs/PhenTab/PhenTop"]
+layout_mode = 2
+size_flags_horizontal = 3
+
+[node name="PhenPick" type="OptionButton" parent="Root/Column/Tabs/PhenTab/PhenTop"]
+layout_mode = 2
+size_flags_horizontal = 3
+
+[node name="PhenNewId" type="LineEdit" parent="Root/Column/Tabs/PhenTab/PhenTop"]
+custom_minimum_size = Vector2(120, 0)
+layout_mode = 2
+placeholder_text = "新现象ID"
+
+[node name="PhenNewBtn" type="Button" parent="Root/Column/Tabs/PhenTab/PhenTop"]
+layout_mode = 2
+text = "创建"
+
+[node name="PhenDelBtn" type="Button" parent="Root/Column/Tabs/PhenTab/PhenTop"]
+layout_mode = 2
+text = "删除"
+
+[node name="PhenScroll" type="ScrollContainer" parent="Root/Column/Tabs/PhenTab"]
+layout_mode = 2
+size_flags_vertical = 3
+
+[node name="PhenForm" type="VBoxContainer" parent="Root/Column/Tabs/PhenTab/PhenScroll"]
+layout_mode = 2
+size_flags_horizontal = 3
+theme_override_constants/separation = 8
+
+[node name="PhenNameRow" type="HBoxContainer" parent="Root/Column/Tabs/PhenTab/PhenScroll/PhenForm"]
+layout_mode = 2
+theme_override_constants/separation = 8
+
+[node name="PhenNameKey" type="Label" parent="Root/Column/Tabs/PhenTab/PhenScroll/PhenForm/PhenNameRow"]
+custom_minimum_size = Vector2(190, 0)
+layout_mode = 2
+theme_override_colors/font_color = Color(0.62, 0.69, 0.8, 1)
+text = "名称 name（本地化 zh）"
+
+[node name="PhenNameEdit" type="LineEdit" parent="Root/Column/Tabs/PhenTab/PhenScroll/PhenForm/PhenNameRow"]
+layout_mode = 2
+size_flags_horizontal = 3
+
+[node name="ScaleRow" type="HBoxContainer" parent="Root/Column/Tabs/PhenTab/PhenScroll/PhenForm"]
+layout_mode = 2
+theme_override_constants/separation = 10
+
+[node name="PhenScaleKey" type="Label" parent="Root/Column/Tabs/PhenTab/PhenScroll/PhenForm/ScaleRow"]
+layout_mode = 2
+theme_override_colors/font_color = Color(0.62, 0.69, 0.8, 1)
+text = "规模 scale_km"
+
+[node name="PhenScaleSpin" type="SpinBox" parent="Root/Column/Tabs/PhenTab/PhenScroll/PhenForm/ScaleRow"]
+custom_minimum_size = Vector2(120, 0)
+layout_mode = 2
+max_value = 100000.0
+step = 10.0
+value = 1000.0
+
+[node name="PhenSpeedKey" type="Label" parent="Root/Column/Tabs/PhenTab/PhenScroll/PhenForm/ScaleRow"]
+layout_mode = 2
+theme_override_colors/font_color = Color(0.62, 0.69, 0.8, 1)
+text = "迁移速度 speed_kmh"
+
+[node name="PhenSpeedSpin" type="SpinBox" parent="Root/Column/Tabs/PhenTab/PhenScroll/PhenForm/ScaleRow"]
+custom_minimum_size = Vector2(120, 0)
+layout_mode = 2
+max_value = 500.0
+value = 10.0
+
+[node name="ShapeRow" type="HBoxContainer" parent="Root/Column/Tabs/PhenTab/PhenScroll/PhenForm"]
+layout_mode = 2
+theme_override_constants/separation = 10
+
+[node name="PhenShapeKey" type="Label" parent="Root/Column/Tabs/PhenTab/PhenScroll/PhenForm/ShapeRow"]
+layout_mode = 2
+theme_override_colors/font_color = Color(0.62, 0.69, 0.8, 1)
+text = "作用形状 shape"
+
+[node name="PhenShapeTypePick" type="OptionButton" parent="Root/Column/Tabs/PhenTab/PhenScroll/PhenForm/ShapeRow"]
+layout_mode = 2
+
+[node name="PhenAxisAKey" type="Label" parent="Root/Column/Tabs/PhenTab/PhenScroll/PhenForm/ShapeRow"]
+layout_mode = 2
+theme_override_colors/font_color = Color(0.62, 0.69, 0.8, 1)
+text = "长轴 km"
+
+[node name="PhenAxisASpin" type="SpinBox" parent="Root/Column/Tabs/PhenTab/PhenScroll/PhenForm/ShapeRow"]
+custom_minimum_size = Vector2(110, 0)
+layout_mode = 2
+min_value = 1.0
+max_value = 20000.0
+value = 1000.0
+
+[node name="PhenAxisBKey" type="Label" parent="Root/Column/Tabs/PhenTab/PhenScroll/PhenForm/ShapeRow"]
+layout_mode = 2
+theme_override_colors/font_color = Color(0.62, 0.69, 0.8, 1)
+text = "短轴 km"
+
+[node name="PhenAxisBSpin" type="SpinBox" parent="Root/Column/Tabs/PhenTab/PhenScroll/PhenForm/ShapeRow"]
+custom_minimum_size = Vector2(110, 0)
+layout_mode = 2
+min_value = 1.0
+max_value = 20000.0
+value = 400.0
+
+[node name="TempRulesRow" type="HBoxContainer" parent="Root/Column/Tabs/PhenTab/PhenScroll/PhenForm"]
+layout_mode = 2
+theme_override_constants/separation = 10
+
+[node name="PhenTHKey" type="Label" parent="Root/Column/Tabs/PhenTab/PhenScroll/PhenForm/TempRulesRow"]
+layout_mode = 2
+theme_override_colors/font_color = Color(0.62, 0.69, 0.8, 1)
+text = "规则 · 日高温 Δ℃"
+
+[node name="PhenTHSpin" type="SpinBox" parent="Root/Column/Tabs/PhenTab/PhenScroll/PhenForm/TempRulesRow"]
+custom_minimum_size = Vector2(100, 0)
+layout_mode = 2
+min_value = -30.0
+max_value = 30.0
+step = 0.1
+
+[node name="PhenTLKey" type="Label" parent="Root/Column/Tabs/PhenTab/PhenScroll/PhenForm/TempRulesRow"]
+layout_mode = 2
+theme_override_colors/font_color = Color(0.62, 0.69, 0.8, 1)
+text = "日低温 Δ℃"
+
+[node name="PhenTLSpin" type="SpinBox" parent="Root/Column/Tabs/PhenTab/PhenScroll/PhenForm/TempRulesRow"]
+custom_minimum_size = Vector2(100, 0)
+layout_mode = 2
+min_value = -30.0
+max_value = 30.0
+step = 0.1
+
+[node name="RainRulesRow" type="HBoxContainer" parent="Root/Column/Tabs/PhenTab/PhenScroll/PhenForm"]
+layout_mode = 2
+theme_override_constants/separation = 10
+
+[node name="PhenRBKey" type="Label" parent="Root/Column/Tabs/PhenTab/PhenScroll/PhenForm/RainRulesRow"]
+layout_mode = 2
+theme_override_colors/font_color = Color(0.62, 0.69, 0.8, 1)
+text = "规则 · 降水偏置 rain_bias"
+
+[node name="PhenRBSpin" type="SpinBox" parent="Root/Column/Tabs/PhenTab/PhenScroll/PhenForm/RainRulesRow"]
+custom_minimum_size = Vector2(100, 0)
+layout_mode = 2
+min_value = -1.0
+max_value = 1.0
+step = 0.05
+
+[node name="PhenCDKey" type="Label" parent="Root/Column/Tabs/PhenTab/PhenScroll/PhenForm/RainRulesRow"]
+layout_mode = 2
+theme_override_colors/font_color = Color(0.62, 0.69, 0.8, 1)
+text = "云量 Δ cloud"
+
+[node name="PhenCDSpin" type="SpinBox" parent="Root/Column/Tabs/PhenTab/PhenScroll/PhenForm/RainRulesRow"]
+custom_minimum_size = Vector2(100, 0)
+layout_mode = 2
+min_value = -1.0
+max_value = 1.0
+step = 0.05
+
+[node name="DurRow" type="HBoxContainer" parent="Root/Column/Tabs/PhenTab/PhenScroll/PhenForm"]
+layout_mode = 2
+theme_override_constants/separation = 10
+
+[node name="PhenDurKey" type="Label" parent="Root/Column/Tabs/PhenTab/PhenScroll/PhenForm/DurRow"]
+layout_mode = 2
+theme_override_colors/font_color = Color(0.62, 0.69, 0.8, 1)
+text = "持续时间 hours [min,max]"
+
+[node name="PhenDurMinSpin" type="SpinBox" parent="Root/Column/Tabs/PhenTab/PhenScroll/PhenForm/DurRow"]
+custom_minimum_size = Vector2(110, 0)
+layout_mode = 2
+min_value = 1.0
+max_value = 8760.0
+value = 48.0
+
+[node name="PhenDurMaxSpin" type="SpinBox" parent="Root/Column/Tabs/PhenTab/PhenScroll/PhenForm/DurRow"]
+custom_minimum_size = Vector2(110, 0)
+layout_mode = 2
+min_value = 1.0
+max_value = 8760.0
+value = 96.0
+
+[node name="OriginSection" type="VBoxContainer" parent="Root/Column/Tabs/PhenTab/PhenScroll/PhenForm"]
+layout_mode = 2
+theme_override_constants/separation = 4
+
+[node name="Title" type="Label" parent="Root/Column/Tabs/PhenTab/PhenScroll/PhenForm/OriginSection"]
+layout_mode = 2
+theme_override_colors/font_color = Color(0.62, 0.69, 0.8, 1)
+text = "起源 origin（分布规律：纬度带约束——副热带高压不能出现在北极）"
+
+[node name="OriginRow1" type="HBoxContainer" parent="Root/Column/Tabs/PhenTab/PhenScroll/PhenForm/OriginSection"]
+layout_mode = 2
+theme_override_constants/separation = 10
+
+[node name="PhenLatKey" type="Label" parent="Root/Column/Tabs/PhenTab/PhenScroll/PhenForm/OriginSection/OriginRow1"]
+layout_mode = 2
+theme_override_colors/font_color = Color(0.62, 0.69, 0.8, 1)
+text = "纬度带 lat"
+
+[node name="PhenLatMinSpin" type="SpinBox" parent="Root/Column/Tabs/PhenTab/PhenScroll/PhenForm/OriginSection/OriginRow1"]
+custom_minimum_size = Vector2(100, 0)
+layout_mode = 2
+min_value = -90.0
+max_value = 90.0
+value = -30.0
+
+[node name="PhenLatMid" type="Label" parent="Root/Column/Tabs/PhenTab/PhenScroll/PhenForm/OriginSection/OriginRow1"]
+layout_mode = 2
+text = "～"
+
+[node name="PhenLatMaxSpin" type="SpinBox" parent="Root/Column/Tabs/PhenTab/PhenScroll/PhenForm/OriginSection/OriginRow1"]
+custom_minimum_size = Vector2(100, 0)
+layout_mode = 2
+max_value = 90.0
+value = 30.0
+
+[node name="PhenWhereKey" type="Label" parent="Root/Column/Tabs/PhenTab/PhenScroll/PhenForm/OriginSection/OriginRow1"]
+layout_mode = 2
+theme_override_colors/font_color = Color(0.62, 0.69, 0.8, 1)
+text = "环境 where"
+
+[node name="PhenWherePick" type="OptionButton" parent="Root/Column/Tabs/PhenTab/PhenScroll/PhenForm/OriginSection/OriginRow1"]
+layout_mode = 2
+
+[node name="OriginRow2" type="HBoxContainer" parent="Root/Column/Tabs/PhenTab/PhenScroll/PhenForm/OriginSection"]
+layout_mode = 2
+theme_override_constants/separation = 10
+
+[node name="PhenSeasonKey" type="Label" parent="Root/Column/Tabs/PhenTab/PhenScroll/PhenForm/OriginSection/OriginRow2"]
+layout_mode = 2
+theme_override_colors/font_color = Color(0.62, 0.69, 0.8, 1)
+text = "季节窗口（月）"
+
+[node name="PhenSeasonASpin" type="SpinBox" parent="Root/Column/Tabs/PhenTab/PhenScroll/PhenForm/OriginSection/OriginRow2"]
+custom_minimum_size = Vector2(80, 0)
+layout_mode = 2
+min_value = 1.0
+max_value = 12.0
+value = 1.0
+
+[node name="PhenSeasonMid" type="Label" parent="Root/Column/Tabs/PhenTab/PhenScroll/PhenForm/OriginSection/OriginRow2"]
+layout_mode = 2
+text = "～"
+
+[node name="PhenSeasonBSpin" type="SpinBox" parent="Root/Column/Tabs/PhenTab/PhenScroll/PhenForm/OriginSection/OriginRow2"]
+custom_minimum_size = Vector2(80, 0)
+layout_mode = 2
+min_value = 1.0
+max_value = 12.0
+value = 12.0
+
+[node name="PhenPKey" type="Label" parent="Root/Column/Tabs/PhenTab/PhenScroll/PhenForm/OriginSection/OriginRow2"]
+layout_mode = 2
+theme_override_colors/font_color = Color(0.62, 0.69, 0.8, 1)
+text = "每日概率 p_per_day"
+
+[node name="PhenPSpin" type="SpinBox" parent="Root/Column/Tabs/PhenTab/PhenScroll/PhenForm/OriginSection/OriginRow2"]
+custom_minimum_size = Vector2(100, 0)
+layout_mode = 2
+max_value = 1.0
+step = 0.01
+value = 0.05
+
+[node name="RelSection" type="VBoxContainer" parent="Root/Column/Tabs/PhenTab/PhenScroll/PhenForm"]
+layout_mode = 2
+theme_override_constants/separation = 4
+
+[node name="Title" type="Label" parent="Root/Column/Tabs/PhenTab/PhenScroll/PhenForm/RelSection"]
+layout_mode = 2
+theme_override_colors/font_color = Color(0.62, 0.69, 0.8, 1)
+text = "现象关系（掣肘/促进：互斥 exclusive / 接续 succession / 促进 ally）"
+
+[node name="RelRows" type="VBoxContainer" parent="Root/Column/Tabs/PhenTab/PhenScroll/PhenForm/RelSection"]
+layout_mode = 2
+theme_override_constants/separation = 4
+
+[node name="RelAddBtn" type="Button" parent="Root/Column/Tabs/PhenTab/PhenScroll/PhenForm/RelSection"]
+layout_mode = 2
+text = "＋ 添加关系"
+
+[node name="KfSection" type="VBoxContainer" parent="Root/Column/Tabs/PhenTab/PhenScroll/PhenForm"]
+layout_mode = 2
+theme_override_constants/separation = 4
+
+[node name="Title" type="Label" parent="Root/Column/Tabs/PhenTab/PhenScroll/PhenForm/KfSection"]
+layout_mode = 2
+theme_override_colors/font_color = Color(0.62, 0.69, 0.8, 1)
+text = "路径关键帧 path_keyframes（t 生命周期 / x,y 世界归一坐标 0..1 / strength 强度）"
+
+[node name="KfRows" type="VBoxContainer" parent="Root/Column/Tabs/PhenTab/PhenScroll/PhenForm/KfSection"]
+layout_mode = 2
+theme_override_constants/separation = 4
+
+[node name="KfAddBtn" type="Button" parent="Root/Column/Tabs/PhenTab/PhenScroll/PhenForm/KfSection"]
+layout_mode = 2
+text = "＋ 添加关键帧"
 
 [node name="LocTab" type="VBoxContainer" parent="Root/Column/Tabs"]
 layout_mode = 2

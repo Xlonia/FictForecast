@@ -33,7 +33,10 @@ func _init() -> void:
 			"5", "6", "7", "8", "9", "10", "11", "12", "13", "14", "15", "16"])
 	var row_header := PackedStringArray(
 			["1", "2", "3", "4", "5", "6", "7", "8", "9", "10", "11", "12", "月份", ""])
+	var row_header_en := PackedStringArray(
+			["month", "1", "2", "3", "4", "5", "6", "7", "8", "9", "10", "11", "12", "月份"])
 	_check(ClimateData._parse_row(row_header, d2) == false, "月份表头行应被跳过")
+	_check(ClimateData._parse_row(row_header_en, d2) == false, "英文表头行（month 前缀）应被跳过")
 	_check(ClimateData._parse_row(row_key_first, d2), "键在首列的行应可解析")
 	_check(d2.monthly.has("high_temp"), "键在首列解析出 high_temp")
 
@@ -106,6 +109,29 @@ func _init() -> void:
 	_check(city.has("long") and city.has("wallpaper") and city.has("effects"),
 			"城市默认骨架字段齐全")
 	_check(SettingsStore.city_display_name("myksolonia") != "", "城市本地化名可读")
+
+	# —— 9. 世界随机搭台（WorldRng）——
+	_check(WorldRng.stable_day_number(1970, 1, 2) == 0, "历法锚点日序为 0")
+	_check(WorldRng.stable_day_number(1970, 1, 1) == 1, "锚点前一日镜像为 1（绕锚点折返）")
+	var dn_old := WorldRng.stable_day_number(1862, 6, 15)
+	_check(dn_old > 0, "锚点前日期镜像为正（%d）" % dn_old)
+	_check(WorldRng.stable_day_number(1800, 6, 15) > dn_old, "越早的日期镜像后越大")
+	_check(WorldRng.mirror_year(1862) == 2078, "年折返示例：1862 → 1970+(1970-1862) = 2078")
+	var nc1 := WorldRng.name_code("default")
+	_check(nc1 == WorldRng.name_code("default"), "世界名数字码恒定")
+	_check(WorldRng.name_code("earth") != nc1, "不同世界名数字码不同")
+	var seeds := WorldRng.world_seeds("default", 10240, 6, 15)
+	_check(seeds.year_seed != seeds.month_seed and seeds.month_seed != seeds.day_seed,
+			"三层种子互不相同")
+	var seeds2 := WorldRng.world_seeds("default", 10240, 6, 16)
+	_check(seeds.day_seed != seeds2.day_seed and seeds.year_seed == seeds2.year_seed,
+			"跨日：日种子变化而年种子不变")
+	var noise_a := WorldRng.city_noise("default", 31.2, 121.5)
+	var noise_b := WorldRng.city_noise("default", 31.3, 121.6)
+	_check(absf(noise_a - noise_b) < 0.1, "相邻坐标噪点平滑（%.3f vs %.3f）" % [noise_a, noise_b])
+	var noise_wrap1 := WorldRng.city_noise("default", 10.0, 179.95)
+	var noise_wrap2 := WorldRng.city_noise("default", 10.0, -179.95)
+	_check(absf(noise_wrap1 - noise_wrap2) < 0.05, "180° 经线两侧噪点连续")
 	_finish()
 
 

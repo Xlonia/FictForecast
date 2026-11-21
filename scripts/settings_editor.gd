@@ -50,6 +50,48 @@ var loc_data := {}
 @onready var loc_value_edit: LineEdit = $Root/Column/Tabs/LocTab/LocAdd/LocValueEdit
 @onready var loc_add_btn: Button = $Root/Column/Tabs/LocTab/LocAdd/LocAddBtn
 
+# —— 世界页参数（m2：波动/日照/现象分布）——
+@onready var w_axial_spin: SpinBox = $Root/Column/Tabs/WorldTab/Form/ParamSection/Grid/WAxialSpin
+@onready var w_day_hours_spin: SpinBox = $Root/Column/Tabs/WorldTab/Form/ParamSection/Grid/WDayHoursSpin
+@onready var w_temp_sigma_spin: SpinBox = $Root/Column/Tabs/WorldTab/Form/ParamSection/Grid/WTempSigmaSpin
+@onready var w_smooth_spin: SpinBox = $Root/Column/Tabs/WorldTab/Form/ParamSection/Grid/WSmoothSpin
+@onready var w_total_spin: SpinBox = $Root/Column/Tabs/WorldTab/Form/ParamSection/Grid/WTotalSpin
+@onready var w_spread_spin: SpinBox = $Root/Column/Tabs/WorldTab/Form/ParamSection/Grid/WSpreadSpin
+@onready var w_comp_spin: SpinBox = $Root/Column/Tabs/WorldTab/Form/ParamSection/Grid/WCompSpin
+
+# —— 现象页 ——
+@onready var phen_world_pick: OptionButton = $Root/Column/Tabs/PhenTab/PhenTop/PhenWorldPick
+@onready var phen_pick: OptionButton = $Root/Column/Tabs/PhenTab/PhenTop/PhenPick
+@onready var phen_new_id: LineEdit = $Root/Column/Tabs/PhenTab/PhenTop/PhenNewId
+@onready var phen_new_btn: Button = $Root/Column/Tabs/PhenTab/PhenTop/PhenNewBtn
+@onready var phen_del_btn: Button = $Root/Column/Tabs/PhenTab/PhenTop/PhenDelBtn
+@onready var phen_name_edit: LineEdit = $Root/Column/Tabs/PhenTab/PhenScroll/PhenForm/PhenNameRow/PhenNameEdit
+@onready var phen_scale_spin: SpinBox = $Root/Column/Tabs/PhenTab/PhenScroll/PhenForm/ScaleRow/PhenScaleSpin
+@onready var phen_speed_spin: SpinBox = $Root/Column/Tabs/PhenTab/PhenScroll/PhenForm/ScaleRow/PhenSpeedSpin
+@onready var phen_shape_type_pick: OptionButton = $Root/Column/Tabs/PhenTab/PhenScroll/PhenForm/ShapeRow/PhenShapeTypePick
+@onready var phen_axis_a_spin: SpinBox = $Root/Column/Tabs/PhenTab/PhenScroll/PhenForm/ShapeRow/PhenAxisASpin
+@onready var phen_axis_b_spin: SpinBox = $Root/Column/Tabs/PhenTab/PhenScroll/PhenForm/ShapeRow/PhenAxisBSpin
+@onready var phen_th_spin: SpinBox = $Root/Column/Tabs/PhenTab/PhenScroll/PhenForm/TempRulesRow/PhenTHSpin
+@onready var phen_tl_spin: SpinBox = $Root/Column/Tabs/PhenTab/PhenScroll/PhenForm/TempRulesRow/PhenTLSpin
+@onready var phen_rb_spin: SpinBox = $Root/Column/Tabs/PhenTab/PhenScroll/PhenForm/RainRulesRow/PhenRBSpin
+@onready var phen_cd_spin: SpinBox = $Root/Column/Tabs/PhenTab/PhenScroll/PhenForm/RainRulesRow/PhenCDSpin
+@onready var phen_dur_min_spin: SpinBox = $Root/Column/Tabs/PhenTab/PhenScroll/PhenForm/DurRow/PhenDurMinSpin
+@onready var phen_dur_max_spin: SpinBox = $Root/Column/Tabs/PhenTab/PhenScroll/PhenForm/DurRow/PhenDurMaxSpin
+@onready var phen_lat_min_spin: SpinBox = $Root/Column/Tabs/PhenTab/PhenScroll/PhenForm/OriginSection/OriginRow1/PhenLatMinSpin
+@onready var phen_lat_max_spin: SpinBox = $Root/Column/Tabs/PhenTab/PhenScroll/PhenForm/OriginSection/OriginRow1/PhenLatMaxSpin
+@onready var phen_where_pick: OptionButton = $Root/Column/Tabs/PhenTab/PhenScroll/PhenForm/OriginSection/OriginRow1/PhenWherePick
+@onready var phen_season_a_spin: SpinBox = $Root/Column/Tabs/PhenTab/PhenScroll/PhenForm/OriginSection/OriginRow2/PhenSeasonASpin
+@onready var phen_season_b_spin: SpinBox = $Root/Column/Tabs/PhenTab/PhenScroll/PhenForm/OriginSection/OriginRow2/PhenSeasonBSpin
+@onready var phen_p_spin: SpinBox = $Root/Column/Tabs/PhenTab/PhenScroll/PhenForm/OriginSection/OriginRow2/PhenPSpin
+@onready var rel_rows: VBoxContainer = $Root/Column/Tabs/PhenTab/PhenScroll/PhenForm/RelSection/RelRows
+@onready var rel_add_btn: Button = $Root/Column/Tabs/PhenTab/PhenScroll/PhenForm/RelSection/RelAddBtn
+@onready var kf_rows: VBoxContainer = $Root/Column/Tabs/PhenTab/PhenScroll/PhenForm/KfSection/KfRows
+@onready var kf_add_btn: Button = $Root/Column/Tabs/PhenTab/PhenScroll/PhenForm/KfSection/KfAddBtn
+
+var phen_world_id := ""
+var phen_data := {}      # Worlds/<id>.phenomena.json 内容
+var phen_index := -1
+
 
 func _ready() -> void:
 	SettingsStore.ensure_defaults()
@@ -77,10 +119,59 @@ func _ready() -> void:
 	loc_add_btn.pressed.connect(_on_loc_add)
 	save_btn.pressed.connect(_on_save)
 
+	# 世界参数 SpinBox → current_world 字段实时写入（保存时随世界 JSON 落盘）
+	for pair in [[w_axial_spin, "axial_tilt_deg"], [w_day_hours_spin, "day_hours"],
+			[w_temp_sigma_spin, "month_temp_sigma"], [w_smooth_spin, "month_smoothing"],
+			[w_total_spin, "monthly_total_strength"], [w_spread_spin, "phenomena_spread_days"],
+			[w_comp_spin, "annual_compensation"]]:
+		var spin: SpinBox = pair[0]
+		var key: String = pair[1]
+		spin.value_changed.connect(func(v: float) -> void: current_world[key] = v)
+
+	phen_shape_type_pick.add_item("椭圆 ellipse", 0)
+	phen_shape_type_pick.set_item_metadata(0, "ellipse")
+	phen_shape_type_pick.select(0)
+	for pair in [["any", "任意 any"], ["land", "陆地 land"], ["sea", "海洋 sea"], ["coast", "海岸 coast"]]:
+		phen_where_pick.add_item(pair[1], 0)
+		phen_where_pick.set_item_metadata(phen_where_pick.item_count - 1, pair[0])
+	phen_where_pick.select(0)
+
+	_refresh_phen_worlds()
+	_select_phen_world(world_ids[0] if not world_ids.is_empty() else "")
+
+	phen_world_pick.item_selected.connect(_on_phen_world_picked)
+	phen_pick.item_selected.connect(_on_phen_picked)
+	phen_new_btn.pressed.connect(_on_phen_created)
+	phen_del_btn.pressed.connect(_on_phen_deleted)
+	phen_name_edit.text_changed.connect(_on_phen_name_changed)
+	phen_shape_type_pick.item_selected.connect(_on_shape_type_picked)
+	phen_where_pick.item_selected.connect(_on_where_picked)
+	phen_scale_spin.value_changed.connect(func(v: float) -> void: _phen_set("scale_km", v))
+	phen_speed_spin.value_changed.connect(func(v: float) -> void: _phen_set("speed_kmh", v))
+	phen_axis_a_spin.value_changed.connect(func(v: float) -> void: _phen_set_axis(0, v))
+	phen_axis_b_spin.value_changed.connect(func(v: float) -> void: _phen_set_axis(1, v))
+	phen_th_spin.value_changed.connect(func(v: float) -> void: _phen_set_rule("temp_high", v))
+	phen_tl_spin.value_changed.connect(func(v: float) -> void: _phen_set_rule("temp_low", v))
+	phen_rb_spin.value_changed.connect(func(v: float) -> void: _phen_set_rule("rain_bias", v))
+	phen_cd_spin.value_changed.connect(func(v: float) -> void: _phen_set_rule("cloud", v))
+	phen_dur_min_spin.value_changed.connect(func(v: float) -> void: _phen_set_duration(0, v))
+	phen_dur_max_spin.value_changed.connect(func(v: float) -> void: _phen_set_duration(1, v))
+	phen_lat_min_spin.value_changed.connect(func(v: float) -> void: _phen_set_origin("lat_min", v))
+	phen_lat_max_spin.value_changed.connect(func(v: float) -> void: _phen_set_origin("lat_max", v))
+	phen_season_a_spin.value_changed.connect(func(v: float) -> void: _phen_set_origin_season(0, int(v)))
+	phen_season_b_spin.value_changed.connect(func(v: float) -> void: _phen_set_origin_season(1, int(v)))
+	phen_p_spin.value_changed.connect(func(v: float) -> void: _phen_set_origin("p_per_day", v))
+	rel_add_btn.pressed.connect(_on_rel_add)
+	kf_add_btn.pressed.connect(_on_kf_add)
+
+	# 可关闭的系统窗口：从主程序打开 → 真关闭并释放；独立打开（批处理）→ 退出
+	close_requested.connect(_on_close_requested)
+
 	# 页签中文标题（TabContainer 默认用节点名）
 	tabs.set_tab_title(0, "世界")
 	tabs.set_tab_title(1, "城市")
-	tabs.set_tab_title(2, "本地化")
+	tabs.set_tab_title(2, "现象")
+	tabs.set_tab_title(3, "本地化")
 	# 开发辅助：FF_EDITOR_TAB=0/1/2 启动时定位到指定页签
 	var env_tab := OS.get_environment("FF_EDITOR_TAB")
 	if env_tab.is_valid_int():
@@ -110,6 +201,16 @@ func _select_world(id: String) -> void:
 			break
 	seed_edit.text = str(current_world.get("seed", ""))
 	seed_edit.editable = id != ""
+	for sp in [w_axial_spin, w_day_hours_spin, w_temp_sigma_spin, w_smooth_spin,
+			w_total_spin, w_spread_spin, w_comp_spin]:
+		sp.editable = id != ""
+	w_axial_spin.value = float(current_world.get("axial_tilt_deg", 23.44))
+	w_day_hours_spin.value = float(current_world.get("day_hours", 24.0))
+	w_temp_sigma_spin.value = float(current_world.get("month_temp_sigma", 2.2))
+	w_smooth_spin.value = float(current_world.get("month_smoothing", 0.5))
+	w_total_spin.value = float(current_world.get("monthly_total_strength", 0.0))
+	w_spread_spin.value = float(current_world.get("phenomena_spread_days", 7.0))
+	w_comp_spin.value = float(current_world.get("annual_compensation", 0.0))
 	_rebuild_time_rows()
 	_rebuild_date_rows()
 
@@ -455,7 +556,30 @@ func _on_save() -> void:
 		1:
 			_save_city_tab()
 		2:
+			_save_phen_tab()
+		3:
 			_save_loc_tab()
+
+
+func _save_phen_tab() -> void:
+	if phen_world_id.is_empty():
+		_set_status("没有可保存的世界现象")
+		return
+	var err := SettingsStore.save_phenomena(phen_world_id, phen_data)
+	if err == OK:
+		SettingsStore.save_localization(loc_data)
+		_refresh_phen_worlds()
+		_set_status("已保存 Worlds/%s.phenomena.json 与本地化" % phen_world_id)
+	else:
+		_set_status("保存失败（%d）" % err)
+
+
+## 可关闭的系统窗口：独立打开（批处理/主场景）→ 退出；从主程序打开 → 真关闭并释放。
+func _on_close_requested() -> void:
+	if get_parent() == get_tree().root:
+		get_tree().quit()
+	else:
+		queue_free()
 
 
 func _save_world_tab() -> void:
@@ -498,6 +622,361 @@ func _save_loc_tab() -> void:
 		_set_status("已保存 res://Localization/zh.yaml")
 	else:
 		_set_status("保存失败（%d）" % err)
+
+
+# ———————— 现象页 ————————
+
+func _loc_value(group: String, key: String) -> String:
+	if loc_data.has(group) and typeof(loc_data[group]) == TYPE_DICTIONARY:
+		return str(loc_data[group].get(key, ""))
+	return ""
+
+
+func _refresh_phen_worlds() -> void:
+	phen_world_pick.clear()
+	for id in world_ids:
+		var disp := SettingsStore.world_display_name(id)
+		phen_world_pick.add_item(id if disp.is_empty() else "%s（%s）" % [id, disp], 0)
+		phen_world_pick.set_item_metadata(phen_world_pick.item_count - 1, id)
+	if world_ids.is_empty():
+		phen_world_pick.add_item("（Worlds/ 下没有世界文件）", 0)
+		phen_world_pick.set_item_disabled(0, true)
+
+
+func _select_phen_world(id: String) -> void:
+	phen_world_id = id
+	phen_data = SettingsStore.load_phenomena(id) if id != "" else {}
+	for i in phen_world_pick.item_count:
+		if str(phen_world_pick.get_item_metadata(i)) == id:
+			phen_world_pick.select(i)
+			break
+	_refresh_phen_pick()
+
+
+func _on_phen_world_picked(index: int) -> void:
+	_select_phen_world(str(phen_world_pick.get_item_metadata(index)))
+
+
+func _phen_list() -> Array:
+	return phen_data.get("phenomena", [])
+
+
+func _current_phen() -> Dictionary:
+	var arr := _phen_list()
+	if phen_index >= 0 and phen_index < arr.size():
+		return arr[phen_index]
+	return {}
+
+
+func _refresh_phen_pick() -> void:
+	phen_pick.clear()
+	var arr := _phen_list()
+	for i in arr.size():
+		var eid := str(arr[i].get("id", ""))
+		var disp := _loc_value("phenomena", eid)
+		var shown := eid if not eid.is_empty() else "（未命名）"
+		phen_pick.add_item(shown if disp.is_empty() else "%s（%s）" % [shown, disp], 0)
+		phen_pick.set_item_metadata(i, i)
+	if arr.is_empty():
+		phen_pick.add_item("（该世界暂无气候现象）", 0)
+		phen_pick.set_item_disabled(0, true)
+		phen_index = -1
+	else:
+		if phen_index < 0 or phen_index >= arr.size():
+			phen_index = 0
+		phen_pick.select(phen_index)
+	_select_phen_entry()
+
+
+func _on_phen_picked(index: int) -> void:
+	phen_index = index
+	_select_phen_entry()
+
+
+func _select_phen_entry() -> void:
+	var e := _current_phen()
+	var enabled := not e.is_empty()
+	for c in [phen_name_edit, phen_scale_spin, phen_speed_spin, phen_shape_type_pick,
+			phen_axis_a_spin, phen_axis_b_spin, phen_th_spin, phen_tl_spin, phen_rb_spin,
+			phen_cd_spin, phen_dur_min_spin, phen_dur_max_spin, phen_lat_min_spin,
+			phen_lat_max_spin, phen_where_pick, phen_season_a_spin, phen_season_b_spin,
+			phen_p_spin, rel_add_btn, kf_add_btn]:
+		if c is LineEdit or c is SpinBox:
+			c.editable = enabled
+		else:
+			c.disabled = not enabled
+	phen_del_btn.disabled = not enabled
+	_clear_children(rel_rows)
+	_clear_children(kf_rows)
+	if e.is_empty():
+		phen_name_edit.text = ""
+		return
+	phen_name_edit.text = _loc_value("phenomena", str(e.get("id", "")))
+	phen_scale_spin.value = float(e.get("scale_km", 1000.0))
+	phen_speed_spin.value = float(e.get("speed_kmh", 10.0))
+	var shape: Dictionary = e.get("shape", {})
+	var stype := str(shape.get("type", "ellipse"))
+	for i in phen_shape_type_pick.item_count:
+		if str(phen_shape_type_pick.get_item_metadata(i)) == stype:
+			phen_shape_type_pick.select(i)
+			break
+	var axes: Array = shape.get("axes_km", [1000.0, 400.0])
+	phen_axis_a_spin.value = float(axes[0]) if axes.size() > 0 else 1000.0
+	phen_axis_b_spin.value = float(axes[1]) if axes.size() > 1 else 400.0
+	var rules: Dictionary = e.get("rules", {})
+	phen_th_spin.value = float(rules.get("temp_high", 0.0))
+	phen_tl_spin.value = float(rules.get("temp_low", 0.0))
+	phen_rb_spin.value = float(rules.get("rain_bias", 0.0))
+	phen_cd_spin.value = float(rules.get("cloud", 0.0))
+	var dur: Array = e.get("duration_hours", [48.0, 96.0])
+	phen_dur_min_spin.value = float(dur[0]) if dur.size() > 0 else 48.0
+	phen_dur_max_spin.value = float(dur[1]) if dur.size() > 1 else 96.0
+	var origin: Dictionary = e.get("origin", {})
+	phen_lat_min_spin.value = float(origin.get("lat_min", -30.0))
+	phen_lat_max_spin.value = float(origin.get("lat_max", 30.0))
+	var where := str(origin.get("where", "any"))
+	for i in phen_where_pick.item_count:
+		if str(phen_where_pick.get_item_metadata(i)) == where:
+			phen_where_pick.select(i)
+			break
+	var season: Array = origin.get("season", [1, 12])
+	phen_season_a_spin.value = float(season[0]) if season.size() > 0 else 1.0
+	phen_season_b_spin.value = float(season[1]) if season.size() > 1 else 12.0
+	phen_p_spin.value = float(origin.get("p_per_day", 0.05))
+	_rebuild_rel_rows()
+	_rebuild_kf_rows()
+
+
+func _phen_set(key: String, v) -> void:
+	var e := _current_phen()
+	if not e.is_empty():
+		e[key] = v
+
+
+func _phen_set_rule(key: String, v) -> void:
+	var e := _current_phen()
+	if e.is_empty():
+		return
+	if not e.has("rules") or typeof(e["rules"]) != TYPE_DICTIONARY:
+		e["rules"] = {}
+	e["rules"][key] = v
+
+
+func _phen_set_shape(key: String, v) -> void:
+	var e := _current_phen()
+	if e.is_empty():
+		return
+	if not e.has("shape") or typeof(e["shape"]) != TYPE_DICTIONARY:
+		e["shape"] = {"type": "ellipse", "axes_km": [1000.0, 400.0]}
+	e["shape"][key] = v
+
+
+func _phen_set_axis(idx: int, v: float) -> void:
+	var e := _current_phen()
+	if e.is_empty():
+		return
+	_phen_set_shape("axes_km", e.get("shape", {}).get("axes_km", [1000.0, 400.0]))
+	var axes: Array = e["shape"]["axes_km"]
+	while axes.size() < 2:
+		axes.append(1000.0)
+	axes[idx] = v
+
+
+func _phen_set_duration(idx: int, v: float) -> void:
+	var e := _current_phen()
+	if e.is_empty():
+		return
+	if not e.has("duration_hours") or typeof(e["duration_hours"]) != TYPE_ARRAY:
+		e["duration_hours"] = [48.0, 96.0]
+	while (e["duration_hours"] as Array).size() < 2:
+		(e["duration_hours"] as Array).append(0.0)
+	e["duration_hours"][idx] = v
+
+
+func _phen_set_origin(key: String, v) -> void:
+	var e := _current_phen()
+	if e.is_empty():
+		return
+	if not e.has("origin") or typeof(e["origin"]) != TYPE_DICTIONARY:
+		e["origin"] = {}
+	e["origin"][key] = v
+
+
+func _phen_set_origin_season(idx: int, v: int) -> void:
+	var e := _current_phen()
+	if e.is_empty():
+		return
+	_phen_set_origin("season", e.get("origin", {}).get("season", [1, 12]))
+	var season: Array = e["origin"]["season"]
+	while season.size() < 2:
+		season.append(1)
+	season[idx] = v
+
+
+func _on_shape_type_picked(index: int) -> void:
+	_phen_set_shape("type", str(phen_shape_type_pick.get_item_metadata(index)))
+
+
+func _on_where_picked(index: int) -> void:
+	_phen_set_origin("where", str(phen_where_pick.get_item_metadata(index)))
+
+
+func _on_phen_name_changed(text: String) -> void:
+	var e := _current_phen()
+	if e.is_empty():
+		return
+	_ensure_loc_group("phenomena")[str(e.get("id", ""))] = text
+
+
+func _on_phen_created() -> void:
+	var id := phen_new_id.text.strip_edges()
+	if phen_world_id.is_empty():
+		_set_status("请先选择世界")
+		return
+	if id.is_empty():
+		_set_status("请先输入新现象 ID")
+		return
+	if id.contains("/") or id.contains("\\") or id.contains(":") or id.contains("."):
+		_set_status("ID 不能包含 / \\ : .")
+		return
+	for e in _phen_list():
+		if str(e.get("id", "")) == id:
+			_set_status("现象 %s 已存在" % id)
+			return
+	if not phen_data.has("phenomena") or typeof(phen_data["phenomena"]) != TYPE_ARRAY:
+		phen_data["phenomena"] = []
+	phen_data["phenomena"].append({
+		"id": id, "scale_km": 1000.0, "speed_kmh": 10.0,
+		"shape": {"type": "ellipse", "axes_km": [1000.0, 400.0]},
+		"rules": {"temp_high": 0.0, "temp_low": 0.0, "rain_bias": 0.0, "cloud": 0.0},
+		"duration_hours": [48.0, 96.0],
+		"path_keyframes": [{"t": 0.0, "x": 0.5, "y": 0.5, "strength": 1.0}],
+		"origin": {"lat_min": -30.0, "lat_max": 30.0, "where": "any", "season": [1, 12], "p_per_day": 0.05},
+		"relations": [],
+	})
+	phen_index = _phen_list().size() - 1
+	_refresh_phen_pick()
+	phen_new_id.text = ""
+	_set_status("已创建现象 %s（记得保存）" % id)
+
+
+func _on_phen_deleted() -> void:
+	var arr := _phen_list()
+	if phen_index < 0 or phen_index >= arr.size():
+		return
+	arr.remove_at(phen_index)
+	phen_index = -1
+	_refresh_phen_pick()
+
+
+func _rebuild_rel_rows() -> void:
+	_clear_children(rel_rows)
+	var e := _current_phen()
+	if e.is_empty():
+		return
+	var arr: Array = e.get("relations", [])
+	for entry in arr:
+		var d: Dictionary = entry
+		rel_rows.add_child(_make_rel_row(d, func() -> void:
+			(e["relations"] as Array).erase(d)
+			_rebuild_rel_rows()))
+
+
+func _make_rel_row(entry: Dictionary, on_remove: Callable) -> HBoxContainer:
+	var box := HBoxContainer.new()
+	var type_pick := OptionButton.new()
+	for pair in [["exclusive", "互斥 exclusive"], ["succession", "接续 succession"], ["ally", "促进 ally"]]:
+		type_pick.add_item(pair[1], 0)
+		type_pick.set_item_metadata(type_pick.item_count - 1, pair[0])
+	var cur := str(entry.get("type", "exclusive"))
+	for i in type_pick.item_count:
+		if str(type_pick.get_item_metadata(i)) == cur:
+			type_pick.select(i)
+			break
+	type_pick.item_selected.connect(func(idx: int) -> void:
+		entry["type"] = str(type_pick.get_item_metadata(idx)))
+	var with_edit := LineEdit.new()
+	var parts := PackedStringArray()
+	for x in entry.get("with", []):
+		parts.append(str(x))
+	with_edit.text = ", ".join(parts)
+	with_edit.placeholder_text = "对方现象ID，逗号分隔"
+	with_edit.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	with_edit.text_changed.connect(func(t: String) -> void:
+		entry["with"] = _split_list(t))
+	var del := Button.new()
+	del.text = "✕"
+	del.pressed.connect(on_remove)
+	box.add_child(type_pick)
+	box.add_child(with_edit)
+	box.add_child(del)
+	return box
+
+
+func _on_rel_add() -> void:
+	var e := _current_phen()
+	if e.is_empty():
+		return
+	if not e.has("relations") or typeof(e["relations"]) != TYPE_ARRAY:
+		e["relations"] = []
+	e["relations"].append({"type": "exclusive", "with": []})
+	_rebuild_rel_rows()
+
+
+func _rebuild_kf_rows() -> void:
+	_clear_children(kf_rows)
+	var e := _current_phen()
+	if e.is_empty():
+		return
+	var arr: Array = e.get("path_keyframes", [])
+	for entry in arr:
+		var d: Dictionary = entry
+		kf_rows.add_child(_make_kf_row(d, func() -> void:
+			(e["path_keyframes"] as Array).erase(d)
+			_rebuild_kf_rows()))
+
+
+func _make_kf_row(entry: Dictionary, on_remove: Callable) -> HBoxContainer:
+	var box := HBoxContainer.new()
+	var defs := [
+		["t", "t", 0.0, 1.0, 0.01],
+		["x", "x", 0.0, 1.0, 0.01],
+		["y", "y", 0.0, 1.0, 0.01],
+		["strength", "强度", 0.0, 3.0, 0.05],
+	]
+	for d in defs:
+		var lab := Label.new()
+		lab.text = d[1]
+		lab.modulate = Color(0.75, 0.8, 0.88)
+		var sp := SpinBox.new()
+		sp.min_value = d[2]
+		sp.max_value = d[3]
+		sp.step = d[4]
+		sp.custom_minimum_size = Vector2(90, 0)
+		sp.value = float(entry.get(d[0], 0.0))
+		var key: String = d[0]
+		sp.value_changed.connect(func(v: float) -> void:
+			entry[key] = v)
+		box.add_child(lab)
+		box.add_child(sp)
+	var del := Button.new()
+	del.text = "✕"
+	del.pressed.connect(on_remove)
+	box.add_child(del)
+	return box
+
+
+func _on_kf_add() -> void:
+	var e := _current_phen()
+	if e.is_empty():
+		return
+	if not e.has("path_keyframes") or typeof(e["path_keyframes"]) != TYPE_ARRAY:
+		e["path_keyframes"] = []
+	var n := (e["path_keyframes"] as Array).size()
+	e["path_keyframes"].append({
+		"t": clampf(n * 0.25, 0.0, 1.0), "x": 0.5, "y": 0.5, "strength": 1.0,
+	})
+	_rebuild_kf_rows()
 
 
 # ———————— 工具 ————————

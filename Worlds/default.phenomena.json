@@ -1,0 +1,63 @@
+{
+	"phenomena": [
+		{
+			"id": "subtropical_high",
+			"scale_km": 1500.0,
+			"speed_kmh": 12.0,
+			"shape": {
+				"type": "ellipse",
+				"axes_km": [1500.0, 600.0]
+			},
+			"rules": {
+				"temp_high": 1.5,
+				"temp_low": 0.5,
+				"rain_bias": -0.2,
+				"cloud": -0.3
+			},
+			"duration_hours": [96.0, 240.0],
+			"path_keyframes": [
+				{"t": 0.0, "x": 0.5, "y": 0.5, "strength": 1.0}
+			],
+			"origin": {
+				"lat_min": 20.0,
+				"lat_max": 40.0,
+				"where": "sea",
+				"season": [6, 8],
+				"p_per_day": 0.05
+			},
+			"relations": [
+				{"type": "exclusive", "with": ["meiyu_front"]}
+			]
+		},
+		{
+			"id": "meiyu_front",
+			"scale_km": 2000.0,
+			"speed_kmh": 8.0,
+			"shape": {
+				"type": "ellipse",
+				"axes_km": [2000.0, 300.0]
+			},
+			"rules": {
+				"temp_high": -1.5,
+				"temp_low": 0.3,
+				"rain_bias": 0.4,
+				"cloud": 0.5
+			},
+			"duration_hours": [120.0, 360.0],
+			"path_keyframes": [
+				{"t": 0.0, "x": 0.3, "y": 0.6, "strength": 1.0},
+				{"t": 1.0, "x": 0.7, "y": 0.55, "strength": 0.8}
+			],
+			"origin": {
+				"lat_min": 25.0,
+				"lat_max": 35.0,
+				"where": "coast",
+				"season": [6, 7],
+				"p_per_day": 0.08
+			},
+			"relations": [
+				{"type": "exclusive", "with": ["subtropical_high"]}
+			]
+		}
+	]
+}

@@ -4,3 +4,7 @@ cities:
 
 worlds:
   default: 现实世界
+
+phenomena:
+  subtropical_high: 副热带高压（示例）
+  meiyu_front: 梅雨准静止锋（示例）

@@ -101,8 +101,8 @@ func _ready() -> void:
 	time_of_day = float(now.hour * 3600 + now.minute * 60 + now.second)
 	background.color = _sky_bg_color()
 	_reload_climates()
-	# 开发辅助：FF_OPEN_EDITOR=1 启动时直接打开设置编辑器（等同菜单点击）
-	if OS.get_environment("FF_OPEN_EDITOR") == "1":
+	# 开发辅助：FF_OPEN_EDITOR=1 或命令行追加 `-- --open-editor` 启动时直接打开设置编辑器
+	if OS.get_environment("FF_OPEN_EDITOR") == "1" or OS.get_cmdline_user_args().has("--open-editor"):
 		_open_settings_editor.call_deferred()
 	# 开发辅助：FF_FORCE_SKY=0/1/2 强制天气型（晴/阴/雨），用于测试图标与配色
 	var env_sky := OS.get_environment("FF_FORCE_SKY")
@@ -231,8 +231,15 @@ func _update_status() -> void:
 	var skipped := ""
 	if climate.skipped_rows > 0:
 		skipped = " · 跳过 %d 行" % climate.skipped_rows
-	status_label.text = "城市：%s　·　数据：%s　·　机制：日期种子 + 日照加权随机（评分筛选未实装）%s%s" % [
-		_city_label(climate.city_name), climate.source_path.get_file(), extra, skipped,
+	# 城市基础数据（Cities/<ID>.json）：坐标、海拔、所属世界、时区
+	var cd := SettingsStore.load_city(climate.city_name)
+	var world_shown := "—"
+	if str(cd.world) != "":
+		var wd := SettingsStore.world_display_name(str(cd.world))
+		world_shown = str(cd.world) if wd.is_empty() else wd
+	status_label.text = "城市：%s（%.1f°, %.1f°, %.0fm · 世界 %s · 时区 %+d 分）　·　数据：%s　·　机制：日期种子 + 日照加权随机（评分筛选未实装）%s%s" % [
+		_city_label(climate.city_name), float(cd.long), float(cd.lati), float(cd.alti),
+		world_shown, int(cd.timez), climate.source_path.get_file(), extra, skipped,
 	]
 
 
@@ -347,11 +354,12 @@ const EDITOR_SCENE := preload("res://scenes/editor.tscn")
 var _editor_window: Window = null
 
 
-## 打开设置编辑器（独立原生窗口；关闭只是隐藏，可再次打开复用实例）。
+## 打开设置编辑器（独立原生窗口；用户关闭窗口时实例被释放，可再次打开）。
 func _open_settings_editor() -> void:
 	if _editor_window == null or not is_instance_valid(_editor_window):
 		_editor_window = EDITOR_SCENE.instantiate()
 		add_child(_editor_window)
+		_editor_window.tree_exited.connect(func() -> void: _editor_window = null)
 	_editor_window.show()
 
 
