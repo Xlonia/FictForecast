@@ -1,0 +1,251 @@
+[gd_scene load_steps=7 format=3]
+
+[ext_resource type="Script" path="res://scripts/main.gd" id="1_main"]
+[ext_resource type="Script" path="res://scripts/weather_icon.gd" id="2_icon"]
+[ext_resource type="Theme" path="res://theme/main_theme.tres" id="3_theme"]
+
+[sub_resource type="StyleBoxFlat" id="sb_panel"]
+content_margin_left = 18.0
+content_margin_top = 14.0
+content_margin_right = 18.0
+content_margin_bottom = 14.0
+bg_color = Color(0.086, 0.114, 0.184, 0.878)
+corner_radius_top_left = 12
+corner_radius_top_right = 12
+corner_radius_bottom_right = 12
+corner_radius_bottom_left = 12
+border_width_left = 1
+border_width_top = 1
+border_width_right = 1
+border_width_bottom = 1
+border_color = Color(1, 1, 1, 0.06)
+
+[sub_resource type="StyleBoxFlat" id="sb_topbar"]
+content_margin_left = 14.0
+content_margin_top = 8.0
+content_margin_right = 14.0
+content_margin_bottom = 8.0
+bg_color = Color(0.062, 0.086, 0.141, 0.909)
+corner_radius_top_left = 10
+corner_radius_top_right = 10
+corner_radius_bottom_right = 10
+corner_radius_bottom_left = 10
+border_width_left = 1
+border_width_top = 1
+border_width_right = 1
+border_width_bottom = 1
+border_color = Color(1, 1, 1, 0.06)
+
+[sub_resource type="StyleBoxFlat" id="sb_status"]
+content_margin_left = 14.0
+content_margin_top = 6.0
+content_margin_right = 14.0
+content_margin_bottom = 6.0
+bg_color = Color(0.055, 0.075, 0.118, 0.909)
+corner_radius_top_left = 10
+corner_radius_top_right = 10
+corner_radius_bottom_right = 10
+corner_radius_bottom_left = 10
+border_width_left = 1
+border_width_top = 1
+border_width_right = 1
+border_width_bottom = 1
+border_color = Color(1, 1, 1, 0.06)
+
+[node name="Main" type="Control"]
+layout_mode = 3
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+theme = ExtResource("3_theme")
+script = ExtResource("1_main")
+
+[node name="Background" type="ColorRect" parent="."]
+layout_mode = 1
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+color = Color(0.16, 0.38, 0.62, 1)
+
+[node name="Margin" type="MarginContainer" parent="."]
+layout_mode = 1
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+theme_override_constants/margin_left = 14
+theme_override_constants/margin_top = 14
+theme_override_constants/margin_right = 14
+theme_override_constants/margin_bottom = 14
+
+[node name="Column" type="VBoxContainer" parent="Margin"]
+layout_mode = 2
+theme_override_constants/separation = 12
+
+[node name="TopBar" type="PanelContainer" parent="Margin/Column"]
+layout_mode = 2
+theme_override_styles/panel = SubResource("sb_topbar")
+
+[node name="HBox" type="HBoxContainer" parent="Margin/Column/TopBar"]
+layout_mode = 2
+theme_override_constants/separation = 16
+
+[node name="MenuBar" type="MenuBar" parent="Margin/Column/TopBar/HBox"]
+layout_mode = 2
+theme_override_colors/font_color = Color(0.92, 0.94, 0.98, 1)
+theme_override_font_sizes/font_size = 16
+
+[node name="Spacer" type="Control" parent="Margin/Column/TopBar/HBox"]
+layout_mode = 2
+size_flags_horizontal = 3
+
+[node name="Clock" type="Label" parent="Margin/Column/TopBar/HBox"]
+layout_mode = 2
+theme_override_colors/font_color = Color(0.92, 0.94, 0.98, 1)
+theme_override_font_sizes/font_size = 19
+text = "--"
+
+[node name="Body" type="HBoxContainer" parent="Margin/Column"]
+layout_mode = 2
+size_flags_vertical = 3
+theme_override_constants/separation = 12
+
+[node name="StatsPanel" type="PanelContainer" parent="Margin/Column/Body"]
+custom_minimum_size = Vector2(300, 0)
+layout_mode = 2
+theme_override_styles/panel = SubResource("sb_panel")
+
+[node name="StatsBox" type="VBoxContainer" parent="Margin/Column/Body/StatsPanel"]
+layout_mode = 2
+theme_override_constants/separation = 12
+
+[node name="StatsTitle" type="Label" parent="Margin/Column/Body/StatsPanel/StatsBox"]
+layout_mode = 2
+theme_override_colors/font_color = Color(0.62, 0.69, 0.8, 1)
+theme_override_font_sizes/font_size = 14
+text = "今日预报"
+
+[node name="HighRow" type="HBoxContainer" parent="Margin/Column/Body/StatsPanel/StatsBox"]
+layout_mode = 2
+
+[node name="HighKey" type="Label" parent="Margin/Column/Body/StatsPanel/StatsBox/HighRow"]
+layout_mode = 2
+size_flags_horizontal = 3
+theme_override_colors/font_color = Color(0.62, 0.69, 0.8, 1)
+theme_override_font_sizes/font_size = 17
+text = "日高温"
+
+[node name="HighValue" type="Label" parent="Margin/Column/Body/StatsPanel/StatsBox/HighRow"]
+layout_mode = 2
+theme_override_colors/font_color = Color(1, 0.62, 0.42, 1)
+theme_override_font_sizes/font_size = 30
+text = "—"
+horizontal_alignment = 2
+
+[node name="LowRow" type="HBoxContainer" parent="Margin/Column/Body/StatsPanel/StatsBox"]
+layout_mode = 2
+
+[node name="LowKey" type="Label" parent="Margin/Column/Body/StatsPanel/StatsBox/LowRow"]
+layout_mode = 2
+size_flags_horizontal = 3
+theme_override_colors/font_color = Color(0.62, 0.69, 0.8, 1)
+theme_override_font_sizes/font_size = 17
+text = "低温"
+
+[node name="LowValue" type="Label" parent="Margin/Column/Body/StatsPanel/StatsBox/LowRow"]
+layout_mode = 2
+theme_override_colors/font_color = Color(0.56, 0.8, 1, 1)
+theme_override_font_sizes/font_size = 30
+text = "—"
+horizontal_alignment = 2
+
+[node name="RainRow" type="HBoxContainer" parent="Margin/Column/Body/StatsPanel/StatsBox"]
+layout_mode = 2
+
+[node name="RainKey" type="Label" parent="Margin/Column/Body/StatsPanel/StatsBox/RainRow"]
+layout_mode = 2
+size_flags_horizontal = 3
+theme_override_colors/font_color = Color(0.62, 0.69, 0.8, 1)
+theme_override_font_sizes/font_size = 17
+text = "降雨可能"
+
+[node name="RainValue" type="Label" parent="Margin/Column/Body/StatsPanel/StatsBox/RainRow"]
+layout_mode = 2
+theme_override_colors/font_color = Color(0.6, 0.86, 1, 1)
+theme_override_font_sizes/font_size = 30
+text = "—"
+horizontal_alignment = 2
+
+[node name="Sep" type="HSeparator" parent="Margin/Column/Body/StatsPanel/StatsBox"]
+layout_mode = 2
+
+[node name="Flavor" type="Label" parent="Margin/Column/Body/StatsPanel/StatsBox"]
+layout_mode = 2
+theme_override_colors/font_color = Color(0.55, 0.62, 0.72, 1)
+theme_override_font_sizes/font_size = 13
+autowrap_mode = 3
+text = ""
+
+[node name="CenterPanel" type="PanelContainer" parent="Margin/Column/Body"]
+layout_mode = 2
+size_flags_horizontal = 3
+theme_override_styles/panel = SubResource("sb_panel")
+
+[node name="CenterBox" type="VBoxContainer" parent="Margin/Column/Body/CenterPanel"]
+layout_mode = 2
+theme_override_constants/separation = 6
+alignment = 1
+
+[node name="WeatherIcon" type="Control" parent="Margin/Column/Body/CenterPanel/CenterBox"]
+custom_minimum_size = Vector2(260, 190)
+layout_mode = 2
+size_flags_horizontal = 4
+script = ExtResource("2_icon")
+
+[node name="WeatherName" type="Label" parent="Margin/Column/Body/CenterPanel/CenterBox"]
+layout_mode = 2
+theme_override_colors/font_color = Color(0.95, 0.97, 1, 1)
+theme_override_font_sizes/font_size = 44
+text = "—"
+horizontal_alignment = 1
+
+[node name="WeatherDesc" type="Label" parent="Margin/Column/Body/CenterPanel/CenterBox"]
+layout_mode = 2
+theme_override_colors/font_color = Color(0.62, 0.69, 0.8, 1)
+theme_override_font_sizes/font_size = 15
+text = ""
+horizontal_alignment = 1
+
+[node name="MonthPanel" type="PanelContainer" parent="Margin/Column/Body"]
+custom_minimum_size = Vector2(300, 0)
+layout_mode = 2
+theme_override_styles/panel = SubResource("sb_panel")
+
+[node name="MonthBox" type="VBoxContainer" parent="Margin/Column/Body/MonthPanel"]
+layout_mode = 2
+theme_override_constants/separation = 10
+
+[node name="MonthTitle" type="Label" parent="Margin/Column/Body/MonthPanel/MonthBox"]
+layout_mode = 2
+theme_override_colors/font_color = Color(0.62, 0.69, 0.8, 1)
+theme_override_font_sizes/font_size = 14
+text = "本月气候背景"
+
+[node name="MonthRows" type="VBoxContainer" parent="Margin/Column/Body/MonthPanel/MonthBox"]
+layout_mode = 2
+theme_override_constants/separation = 5
+
+[node name="StatusBar" type="PanelContainer" parent="Margin/Column"]
+layout_mode = 2
+theme_override_styles/panel = SubResource("sb_status")
+
+[node name="StatusLabel" type="Label" parent="Margin/Column/StatusBar"]
+layout_mode = 2
+theme_override_colors/font_color = Color(0.55, 0.62, 0.72, 1)
+theme_override_font_sizes/font_size = 13
+text = "正在启动…"

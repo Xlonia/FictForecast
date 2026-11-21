@@ -1,0 +1,15 @@
+{
+	"base_dates": [
+		{
+			"id": "gregorian",
+			"offset_days": 0.0
+		}
+	],
+	"base_times": [
+		{
+			"id": "utc",
+			"offset_minutes": 0.0
+		}
+	],
+	"seed": ""
+}

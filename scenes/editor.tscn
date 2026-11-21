@@ -1,0 +1,325 @@
+[gd_scene load_steps=3 format=3]
+
+[ext_resource type="Script" path="res://scripts/settings_editor.gd" id="1_editor"]
+[ext_resource type="Theme" path="res://theme/main_theme.tres" id="2_theme"]
+
+[node name="EditorRoot" type="Window"]
+title = "设置编辑器 · 幻想气象局"
+size = Vector2i(980, 680)
+min_size = Vector2i(880, 600)
+embedded = false
+script = ExtResource("1_editor")
+
+[node name="Root" type="MarginContainer" parent="."]
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+theme = ExtResource("2_theme")
+theme_override_constants/margin_left = 12
+theme_override_constants/margin_top = 12
+theme_override_constants/margin_right = 12
+theme_override_constants/margin_bottom = 12
+
+[node name="Column" type="VBoxContainer" parent="Root"]
+layout_mode = 2
+theme_override_constants/separation = 10
+
+[node name="Tabs" type="TabContainer" parent="Root/Column"]
+layout_mode = 2
+size_flags_vertical = 3
+
+[node name="WorldTab" type="VBoxContainer" parent="Root/Column/Tabs"]
+layout_mode = 2
+theme_override_constants/separation = 8
+
+[node name="Top" type="HBoxContainer" parent="Root/Column/Tabs/WorldTab"]
+layout_mode = 2
+theme_override_constants/separation = 8
+
+[node name="WorldPick" type="OptionButton" parent="Root/Column/Tabs/WorldTab/Top"]
+layout_mode = 2
+size_flags_horizontal = 3
+
+[node name="NewId" type="LineEdit" parent="Root/Column/Tabs/WorldTab/Top"]
+custom_minimum_size = Vector2(150, 0)
+layout_mode = 2
+placeholder_text = "新世界ID"
+
+[node name="NewBtn" type="Button" parent="Root/Column/Tabs/WorldTab/Top"]
+layout_mode = 2
+text = "创建世界"
+
+[node name="Form" type="VBoxContainer" parent="Root/Column/Tabs/WorldTab"]
+layout_mode = 2
+theme_override_constants/separation = 8
+
+[node name="SeedRow" type="HBoxContainer" parent="Root/Column/Tabs/WorldTab/Form"]
+layout_mode = 2
+theme_override_constants/separation = 8
+
+[node name="SeedKey" type="Label" parent="Root/Column/Tabs/WorldTab/Form/SeedRow"]
+layout_mode = 2
+size_flags_horizontal = 3
+theme_override_colors/font_color = Color(0.62, 0.69, 0.8, 1)
+text = "种子 seed（留空 = 按本地化键名派生）"
+
+[node name="SeedEdit" type="LineEdit" parent="Root/Column/Tabs/WorldTab/Form/SeedRow"]
+custom_minimum_size = Vector2(240, 0)
+layout_mode = 2
+
+[node name="TimeSection" type="VBoxContainer" parent="Root/Column/Tabs/WorldTab/Form"]
+layout_mode = 2
+theme_override_constants/separation = 4
+
+[node name="Title" type="Label" parent="Root/Column/Tabs/WorldTab/Form/TimeSection"]
+layout_mode = 2
+theme_override_colors/font_color = Color(0.62, 0.69, 0.8, 1)
+text = "基准时间 base_times —— 时区偏差（分钟），会投射到世界 0° 经度；城市 times 引用其 id，非法/留空 → UTC"
+
+[node name="Rows" type="VBoxContainer" parent="Root/Column/Tabs/WorldTab/Form/TimeSection"]
+layout_mode = 2
+theme_override_constants/separation = 4
+
+[node name="AddBtn" type="Button" parent="Root/Column/Tabs/WorldTab/Form/TimeSection"]
+layout_mode = 2
+text = "＋ 添加基准时间"
+
+[node name="DateSection" type="VBoxContainer" parent="Root/Column/Tabs/WorldTab/Form"]
+layout_mode = 2
+theme_override_constants/separation = 4
+
+[node name="Title" type="Label" parent="Root/Column/Tabs/WorldTab/Form/DateSection"]
+layout_mode = 2
+theme_override_colors/font_color = Color(0.62, 0.69, 0.8, 1)
+text = "基准日期 base_dates —— 与现实日期差（天）；城市 calendar 引用其 id，非法/留空 → 公历"
+
+[node name="Rows" type="VBoxContainer" parent="Root/Column/Tabs/WorldTab/Form/DateSection"]
+layout_mode = 2
+theme_override_constants/separation = 4
+
+[node name="AddBtn" type="Button" parent="Root/Column/Tabs/WorldTab/Form/DateSection"]
+layout_mode = 2
+text = "＋ 添加基准日期"
+
+[node name="CityTab" type="VBoxContainer" parent="Root/Column/Tabs"]
+layout_mode = 2
+theme_override_constants/separation = 8
+
+[node name="Top" type="HBoxContainer" parent="Root/Column/Tabs/CityTab"]
+layout_mode = 2
+theme_override_constants/separation = 8
+
+[node name="CityPick" type="OptionButton" parent="Root/Column/Tabs/CityTab/Top"]
+layout_mode = 2
+size_flags_horizontal = 3
+
+[node name="Hint" type="Label" parent="Root/Column/Tabs/CityTab/Top"]
+layout_mode = 2
+theme_override_colors/font_color = Color(0.55, 0.62, 0.72, 1)
+text = "对应 Climate/<ID>.csv"
+
+[node name="Scroll" type="ScrollContainer" parent="Root/Column/Tabs/CityTab"]
+layout_mode = 2
+size_flags_vertical = 3
+
+[node name="Form" type="VBoxContainer" parent="Root/Column/Tabs/CityTab/Scroll"]
+layout_mode = 2
+size_flags_horizontal = 3
+theme_override_constants/separation = 8
+
+[node name="WorldRow" type="HBoxContainer" parent="Root/Column/Tabs/CityTab/Scroll/Form"]
+layout_mode = 2
+theme_override_constants/separation = 8
+
+[node name="WorldKey" type="Label" parent="Root/Column/Tabs/CityTab/Scroll/Form/WorldRow"]
+custom_minimum_size = Vector2(190, 0)
+layout_mode = 2
+theme_override_colors/font_color = Color(0.62, 0.69, 0.8, 1)
+text = "所属世界 world"
+
+[node name="WorldRefPick" type="OptionButton" parent="Root/Column/Tabs/CityTab/Scroll/Form/WorldRow"]
+layout_mode = 2
+size_flags_horizontal = 3
+
+[node name="NameRow" type="HBoxContainer" parent="Root/Column/Tabs/CityTab/Scroll/Form"]
+layout_mode = 2
+theme_override_constants/separation = 8
+
+[node name="NameKey" type="Label" parent="Root/Column/Tabs/CityTab/Scroll/Form/NameRow"]
+custom_minimum_size = Vector2(190, 0)
+layout_mode = 2
+theme_override_colors/font_color = Color(0.62, 0.69, 0.8, 1)
+text = "名称 name（本地化 zh）"
+
+[node name="NameEdit" type="LineEdit" parent="Root/Column/Tabs/CityTab/Scroll/Form/NameRow"]
+layout_mode = 2
+size_flags_horizontal = 3
+
+[node name="GeoRow" type="HBoxContainer" parent="Root/Column/Tabs/CityTab/Scroll/Form"]
+layout_mode = 2
+theme_override_constants/separation = 10
+
+[node name="LongKey" type="Label" parent="Root/Column/Tabs/CityTab/Scroll/Form/GeoRow"]
+layout_mode = 2
+theme_override_colors/font_color = Color(0.62, 0.69, 0.8, 1)
+text = "经度 long"
+
+[node name="LongSpin" type="SpinBox" parent="Root/Column/Tabs/CityTab/Scroll/Form/GeoRow"]
+custom_minimum_size = Vector2(120, 0)
+layout_mode = 2
+max_value = 360.0
+step = 0.01
+
+[node name="LatiKey" type="Label" parent="Root/Column/Tabs/CityTab/Scroll/Form/GeoRow"]
+layout_mode = 2
+theme_override_colors/font_color = Color(0.62, 0.69, 0.8, 1)
+text = "纬度 lati"
+
+[node name="LatiSpin" type="SpinBox" parent="Root/Column/Tabs/CityTab/Scroll/Form/GeoRow"]
+custom_minimum_size = Vector2(120, 0)
+layout_mode = 2
+max_value = 360.0
+step = 0.01
+
+[node name="AltiKey" type="Label" parent="Root/Column/Tabs/CityTab/Scroll/Form/GeoRow"]
+layout_mode = 2
+theme_override_colors/font_color = Color(0.62, 0.69, 0.8, 1)
+text = "海拔 alti（米）"
+
+[node name="AltiSpin" type="SpinBox" parent="Root/Column/Tabs/CityTab/Scroll/Form/GeoRow"]
+custom_minimum_size = Vector2(120, 0)
+layout_mode = 2
+max_value = 20000.0
+min_value = -11000.0
+
+[node name="TimeZoneRow" type="HBoxContainer" parent="Root/Column/Tabs/CityTab/Scroll/Form"]
+layout_mode = 2
+theme_override_constants/separation = 8
+
+[node name="TimezKey" type="Label" parent="Root/Column/Tabs/CityTab/Scroll/Form/TimeZoneRow"]
+custom_minimum_size = Vector2(190, 0)
+layout_mode = 2
+theme_override_colors/font_color = Color(0.62, 0.69, 0.8, 1)
+text = "时区偏差 timez（分钟）"
+
+[node name="TimezSpin" type="SpinBox" parent="Root/Column/Tabs/CityTab/Scroll/Form/TimeZoneRow"]
+custom_minimum_size = Vector2(120, 0)
+layout_mode = 2
+max_value = 1440.0
+min_value = -1440.0
+
+[node name="SystemRow" type="HBoxContainer" parent="Root/Column/Tabs/CityTab/Scroll/Form"]
+layout_mode = 2
+theme_override_constants/separation = 8
+
+[node name="TimesKey" type="Label" parent="Root/Column/Tabs/CityTab/Scroll/Form/SystemRow"]
+custom_minimum_size = Vector2(190, 0)
+layout_mode = 2
+theme_override_colors/font_color = Color(0.62, 0.69, 0.8, 1)
+text = "时间系统 times"
+
+[node name="TimesPick" type="OptionButton" parent="Root/Column/Tabs/CityTab/Scroll/Form/SystemRow"]
+layout_mode = 2
+size_flags_horizontal = 3
+
+[node name="CalendarKey" type="Label" parent="Root/Column/Tabs/CityTab/Scroll/Form/SystemRow"]
+custom_minimum_size = Vector2(120, 0)
+layout_mode = 2
+theme_override_colors/font_color = Color(0.62, 0.69, 0.8, 1)
+text = "历法 calendar"
+
+[node name="CalendarPick" type="OptionButton" parent="Root/Column/Tabs/CityTab/Scroll/Form/SystemRow"]
+layout_mode = 2
+size_flags_horizontal = 3
+
+[node name="WallSection" type="VBoxContainer" parent="Root/Column/Tabs/CityTab/Scroll/Form"]
+layout_mode = 2
+theme_override_constants/separation = 4
+
+[node name="Title" type="Label" parent="Root/Column/Tabs/CityTab/Scroll/Form/WallSection"]
+layout_mode = 2
+theme_override_colors/font_color = Color(0.62, 0.69, 0.8, 1)
+text = "壁纸系列 wallpaper —— {id: [路径…]}；日后在天气表格中引用 id"
+
+[node name="Rows" type="VBoxContainer" parent="Root/Column/Tabs/CityTab/Scroll/Form/WallSection"]
+layout_mode = 2
+theme_override_constants/separation = 4
+
+[node name="AddBtn" type="Button" parent="Root/Column/Tabs/CityTab/Scroll/Form/WallSection"]
+layout_mode = 2
+text = "＋ 添加壁纸系列"
+
+[node name="EffectSection" type="VBoxContainer" parent="Root/Column/Tabs/CityTab/Scroll/Form"]
+layout_mode = 2
+theme_override_constants/separation = 4
+
+[node name="Title" type="Label" parent="Root/Column/Tabs/CityTab/Scroll/Form/EffectSection"]
+layout_mode = 2
+theme_override_colors/font_color = Color(0.62, 0.69, 0.8, 1)
+text = "气象效果 effects —— {id: [标识…]}；日后在天气表格中引用 id"
+
+[node name="Rows" type="VBoxContainer" parent="Root/Column/Tabs/CityTab/Scroll/Form/EffectSection"]
+layout_mode = 2
+theme_override_constants/separation = 4
+
+[node name="AddBtn" type="Button" parent="Root/Column/Tabs/CityTab/Scroll/Form/EffectSection"]
+layout_mode = 2
+text = "＋ 添加气象效果"
+
+[node name="LocTab" type="VBoxContainer" parent="Root/Column/Tabs"]
+layout_mode = 2
+theme_override_constants/separation = 8
+
+[node name="LocHint" type="Label" parent="Root/Column/Tabs/LocTab"]
+layout_mode = 2
+theme_override_colors/font_color = Color(0.55, 0.62, 0.72, 1)
+text = "res://Localization/zh.yaml —— 组: 键: 值（受限 YAML 子集）；城市与世界名称在这里改"
+
+[node name="LocScroll" type="ScrollContainer" parent="Root/Column/Tabs/LocTab"]
+layout_mode = 2
+size_flags_vertical = 3
+
+[node name="LocRows" type="VBoxContainer" parent="Root/Column/Tabs/LocTab/LocScroll"]
+layout_mode = 2
+size_flags_horizontal = 3
+theme_override_constants/separation = 8
+
+[node name="LocAdd" type="HBoxContainer" parent="Root/Column/Tabs/LocTab"]
+layout_mode = 2
+theme_override_constants/separation = 6
+
+[node name="LocGroupEdit" type="LineEdit" parent="Root/Column/Tabs/LocTab/LocAdd"]
+custom_minimum_size = Vector2(120, 0)
+layout_mode = 2
+placeholder_text = "组，如 cities"
+
+[node name="LocKeyEdit" type="LineEdit" parent="Root/Column/Tabs/LocTab/LocAdd"]
+custom_minimum_size = Vector2(160, 0)
+layout_mode = 2
+placeholder_text = "新键"
+
+[node name="LocValueEdit" type="LineEdit" parent="Root/Column/Tabs/LocTab/LocAdd"]
+layout_mode = 2
+size_flags_horizontal = 3
+placeholder_text = "值"
+
+[node name="LocAddBtn" type="Button" parent="Root/Column/Tabs/LocTab/LocAdd"]
+layout_mode = 2
+text = "添加"
+
+[node name="Bottom" type="HBoxContainer" parent="Root/Column"]
+layout_mode = 2
+theme_override_constants/separation = 8
+
+[node name="StatusLabel" type="Label" parent="Root/Column/Bottom"]
+layout_mode = 2
+size_flags_horizontal = 3
+theme_override_colors/font_color = Color(0.55, 0.62, 0.72, 1)
+theme_override_font_sizes/font_size = 13
+text = "修改只在“保存当前页”时写盘；切换选择会丢弃未保存改动"
+
+[node name="SaveBtn" type="Button" parent="Root/Column/Bottom"]
+layout_mode = 2
+text = "保存当前页"
