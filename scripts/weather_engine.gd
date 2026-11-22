@@ -78,6 +78,7 @@ func day_report(year: int, month: int, day: int) -> Dictionary:
 		"low": e["low"],
 		"rain_prob": mr["rain_prob"],       # 当月雨日占比（0..1）——确定性世界的“降雨可能”口径
 		"precip_mm": e["precip_mm"],
+		"wind": e["wind"],
 		"sun_daily": _blend("sunshine", month, day, year) / float(mr["days"]),
 		"humidity": e["rh"],
 		"seed_key": "%04d-%02d-%02d" % [year, month, day],
@@ -141,6 +142,8 @@ func _generate_month(year: int, month: int) -> Dictionary:
 	var sky_roll := {}
 	var snow_roll := {}
 	var mod_roll := {}
+	var wind_roll := {}
+	var wind_base := _wind_base()
 	for d in range(1, days + 1):
 		var rng_d := WorldRng.rng_from_seed(WorldRng.world_seeds(world_id, year, month, d).day_seed)
 		raw_mm[d] = rng_d.randf_range(0.2, 8.0) if rain_set.has(d) else 0.0
@@ -148,6 +151,7 @@ func _generate_month(year: int, month: int) -> Dictionary:
 		sky_roll[d] = rng_d.randf()
 		snow_roll[d] = rng_d.randf()
 		mod_roll[d] = [rng_d.randf(), rng_d.randf()]
+		wind_roll[d] = rng_d.randf()
 
 	# —— 平滑 + 零和收敛（凑齐月积温）：先平滑，再对最终距平做零和——
 	# 月均值由 base_offset（年度+月度+城市偏置）承担，strength=1 时恰好凑齐
@@ -186,8 +190,9 @@ func _generate_month(year: int, month: int) -> Dictionary:
 		var snow := false
 		var precip: float = raw_mm[d]
 		if not is_rain:
+			# 晴概率 = 日照标定 − 云量面偏置（云面高处更难晴）
 			var p_sunny := clampf((_blend("sunshine", month, d, year) / float(days)
-					- SUNNY_BASE) / SUNNY_DIV, SUNNY_MIN, SUNNY_MAX)
+					- SUNNY_BASE) / SUNNY_DIV - _cloud_bias(), SUNNY_MIN, SUNNY_MAX)
 			sky = SkyKind.SUNNY if sky_roll[d] < p_sunny else SkyKind.CLOUDY
 		else:
 			# 冷期雨日按 snow_days/raint 比例转雪
@@ -215,9 +220,10 @@ func _generate_month(year: int, month: int) -> Dictionary:
 		var rh := _rh_from((high + low) * 0.5, td_month)
 		if is_rain:
 			rh = maxf(rh, 92.0)
+		var wind := clampf(wind_base + wind_roll[d] * 3.0, 0.2, 20.0)
 		day_entries.append({
 			"day": d, "sky": sky, "snow": snow, "precip_mm": precip,
-			"high": high, "low": low, "rh": rh, "anomaly": anomaly,
+			"high": high, "low": low, "rh": rh, "wind": wind, "anomaly": anomaly,
 		})
 
 	return {
@@ -314,6 +320,23 @@ func _city_precip_bias() -> float:
 		return 0.0
 	return WorldRng.chart_field(world_id, WorldRng.FIELD_PRECIPITATION,
 			float(city.get("lati", 0.0)), float(city.get("long", 0.0))) * 0.10
+
+
+## 图表随机·云量面：城市经纬度读高度 → 晴概率偏置（±0.25）
+func _cloud_bias() -> float:
+	if world_id.is_empty() or city.is_empty():
+		return 0.0
+	return WorldRng.chart_field(world_id, WorldRng.FIELD_CLOUD,
+			float(city.get("lati", 0.0)), float(city.get("long", 0.0))) * 0.25
+
+
+## 图表随机·风面：城市经纬度读高度 → 基准风速（m/s，2±3 → 钳 0.2..5）
+func _wind_base() -> float:
+	var base := 2.0
+	if not world_id.is_empty() and not city.is_empty():
+		base += WorldRng.chart_field(world_id, WorldRng.FIELD_WIND,
+				float(city.get("lati", 0.0)), float(city.get("long", 0.0))) * 3.0
+	return clampf(base, 0.2, 5.0)
 
 
 func _worldf(key: String, fallback: float) -> float:

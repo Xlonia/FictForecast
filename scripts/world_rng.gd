@@ -25,8 +25,11 @@ static var _field_cache := {}   # "world|field" -> FastNoiseLite（图表随机�
 
 # —— 图表随机柏林面（批复：城市图表随机 = 世界宏观柏林噪音面，城市以经纬度读高度）——
 # 与未来的气候现象柏林面相互独立：不同“面”按 id 对种子做修饰（十六进制插入法）。
+# 面id → 量的映射在 WeatherEngine 中维护；远现实的幻想世界可继续追加 id 作为“额外气候规则”。
 const FIELD_TEMPERATURE := 0    # 图表随机·温度面
 const FIELD_PRECIPITATION := 1  # 图表随机·降水比面
+const FIELD_CLOUD := 2          # 图表随机·云量面
+const FIELD_WIND := 3           # 图表随机·风面
 
 
 ## 函数图种子修饰（批复口径）：种子转十六进制，函数图 id 以两位十六进制插入末尾，
@@ -42,7 +45,12 @@ static func field_seed(base_seed: int, field_id: int) -> int:
 ## 读取图表随机柏林面：城市以经纬度在圆筒面采样（±180° 经线连续），返回约 -1..1。
 ## 面的种子 = field_seed(世界名数字码, 面id)；绘制柏林面在世界地图上是 m5 的工作，
 ## v1 的面由种子程序化生成（“半占位半完善”）。
-static func chart_field(world_id: String, field_id: int, lati: float, long: float) -> float:
+## time_axis：可选时间轴（单位=月，浮点）。默认 0=静态面；作为调试工具可观察面演进。
+## 实现口径（FastNoiseLite 无 4D）：时间表现为**整面斜向漂移**——采样点随时间沿
+## 圆筒面对角线平移，±180° 连续性保持；动态演进暂不接入正式机制（批复 m3.5）。
+## 负数经纬度无需特殊修饰：经度已角度化进圆筒面，纬度是线性轴，噪音原生支持负坐标。
+static func chart_field(world_id: String, field_id: int, lati: float, long: float,
+		time_axis := 0.0) -> float:
 	var ck := "%s|%d" % [world_id, field_id]
 	var n: FastNoiseLite
 	if _field_cache.has(ck):
@@ -54,7 +62,8 @@ static func chart_field(world_id: String, field_id: int, lati: float, long: floa
 		n.frequency = 0.02
 		_field_cache[ck] = n
 	var ang := deg_to_rad(long)
-	return n.get_noise_3d(cos(ang) * 1000.0, sin(ang) * 1000.0, lati * 10.0)
+	var drift := time_axis * 300.0
+	return n.get_noise_3d(cos(ang) * 1000.0 + drift, sin(ang) * 1000.0 + drift, lati * 10.0)
 
 
 ## 世界时钟换算（批复口径）：现实 UTC + 时间系统偏差(分) + 历法锚定(天) → 显示日期时间。

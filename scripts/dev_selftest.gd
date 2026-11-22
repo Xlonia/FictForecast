@@ -189,6 +189,13 @@ func _init() -> void:
 	var ft := WorldRng.chart_field("Novera", WorldRng.FIELD_TEMPERATURE, 31.2, 121.5)
 	var ft2 := WorldRng.chart_field("Novera", WorldRng.FIELD_TEMPERATURE, 31.3, 121.6)
 	_check(absf(ft - ft2) < 0.1, "温度面相邻坐标平滑（%.3f vs %.3f）" % [ft, ft2])
+	var fc := WorldRng.chart_field("Novera", WorldRng.FIELD_CLOUD, 31.2, 121.5)
+	var fw := WorldRng.chart_field("Novera", WorldRng.FIELD_WIND, 31.2, 121.5)
+	_check(fc != fw, "云量面与风面互相独立")
+	var ft_time := WorldRng.chart_field("Novera", WorldRng.FIELD_TEMPERATURE, 31.2, 121.5, 6.0)
+	_check(ft != ft_time, "时间轴调试参数生效（4D 面可选演进）")
+	_check(absf(WorldRng.chart_field("Novera", WorldRng.FIELD_TEMPERATURE, 31.2, 121.5, 0.0) - ft) < 1e-9,
+			"时间轴 0 = 静态面（默认行为不变）")
 	var dt0 := WorldRng.display_datetime(0.0, 0, 0)
 	_check(dt0.year == 1970 and dt0.month == 1 and dt0.day == 1 and dt0.hour == 0, "历法零点换算")
 	var dt_tz := WorldRng.display_datetime(0.0, 420, 0)

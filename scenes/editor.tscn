@@ -680,6 +680,31 @@ theme_override_constants/separation = 4
 layout_mode = 2
 text = "＋ 添加关键帧"
 
+[node name="MapTab" type="VBoxContainer" parent="Root/Column/Tabs"]
+layout_mode = 2
+theme_override_constants/separation = 8
+
+[node name="MapTop" type="HBoxContainer" parent="Root/Column/Tabs/MapTab"]
+layout_mode = 2
+theme_override_constants/separation = 8
+
+[node name="MapCityPick" type="OptionButton" parent="Root/Column/Tabs/MapTab/MapTop"]
+layout_mode = 2
+size_flags_horizontal = 3
+
+[node name="MapLoadBtn" type="Button" parent="Root/Column/Tabs/MapTab/MapTop"]
+layout_mode = 2
+text = "加载参考图…"
+
+[node name="MapHint" type="Label" parent="Root/Column/Tabs/MapTab/MapTop"]
+layout_mode = 2
+theme_override_colors/font_color = Color(0.55, 0.62, 0.72, 1)
+text = "原型：等距圆柱假设（每像素=等度数）；点击地图给选中城市定点经纬度，点击即存"
+
+[node name="MapView" type="Control" parent="Root/Column/Tabs/MapTab"]
+layout_mode = 2
+size_flags_vertical = 3
+
 [node name="LocTab" type="VBoxContainer" parent="Root/Column/Tabs"]
 layout_mode = 2
 theme_override_constants/separation = 8

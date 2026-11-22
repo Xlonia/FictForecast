@@ -54,6 +54,15 @@ var _dirty_timer: Timer
 @onready var effect_rows: VBoxContainer = $Root/Column/Tabs/CityTab/Scroll/Form/EffectSection/Rows
 @onready var effect_add_btn: Button = $Root/Column/Tabs/CityTab/Scroll/Form/EffectSection/AddBtn
 
+# —— 地图锚定原型页（等距圆柱假设；墨卡托与参考图规范归 m5）——
+@onready var map_city_pick: OptionButton = $Root/Column/Tabs/MapTab/MapTop/MapCityPick
+@onready var map_load_btn: Button = $Root/Column/Tabs/MapTab/MapTop/MapLoadBtn
+@onready var map_view: Control = $Root/Column/Tabs/MapTab/MapView
+
+var map_texture: Texture2D = null
+var map_city_id := ""
+var _map_dialog: FileDialog
+
 # —— 本地化页 ——
 @onready var loc_lang_pick: OptionButton = $Root/Column/Tabs/LocTab/LocTop/LangPick
 @onready var loc_new_lang_edit: LineEdit = $Root/Column/Tabs/LocTab/LocTop/NewLangEdit
@@ -123,6 +132,23 @@ func _ready() -> void:
 	_select_city(city_ids[0] if not city_ids.is_empty() else "")
 	_refresh_loc_languages()
 	_select_loc_lang("zh" if SettingsStore.list_languages().has("zh") else SettingsStore.list_languages()[0])
+
+	# —— 地图锚定原型 ——
+	_refresh_map_cities()
+	map_load_btn.pressed.connect(_on_map_load)
+	map_city_pick.item_selected.connect(_on_map_city_picked)
+	map_view.draw.connect(_draw_map_view)
+	map_view.gui_input.connect(_on_map_gui_input)
+	_map_dialog = FileDialog.new()
+	_map_dialog.access = FileDialog.ACCESS_FILESYSTEM
+	_map_dialog.title = "选择世界参考图（等距圆柱：全图 = 经度 -180..180，纬度 90..-90）"
+	_map_dialog.filters = PackedStringArray(["*.png ; PNG 图片", "*.jpg ; JPEG 图片", "*.webp ; WebP 图片"])
+	_map_dialog.file_selected.connect(_on_map_file)
+	add_child(_map_dialog)
+	# 开发辅助：FF_MAP_IMAGE=<图片路径> 启动时自动加载参考图
+	var env_map := OS.get_environment("FF_MAP_IMAGE")
+	if not env_map.is_empty():
+		_on_map_file(env_map)
 
 	world_pick.item_selected.connect(_on_world_picked)
 	new_btn.pressed.connect(_on_world_created)
@@ -211,7 +237,8 @@ func _ready() -> void:
 	tabs.set_tab_title(0, "世界")
 	tabs.set_tab_title(1, "城市")
 	tabs.set_tab_title(2, "现象")
-	tabs.set_tab_title(3, "本地化")
+	tabs.set_tab_title(3, "地图")
+	tabs.set_tab_title(4, "本地化")
 	# 开发辅助：FF_EDITOR_TAB=0/1/2 启动时定位到指定页签
 	var env_tab := OS.get_environment("FF_EDITOR_TAB")
 	if env_tab.is_valid_int():
@@ -359,6 +386,7 @@ func _refresh_cities() -> void:
 	if city_ids.is_empty():
 		city_pick.add_item("（Climate/ 下没有城市 CSV）", 0)
 		city_pick.set_item_disabled(0, true)
+	_refresh_map_cities()
 
 
 func _select_city(id: String) -> void:
@@ -644,6 +672,8 @@ func _on_save() -> void:
 		2:
 			_save_phen_tab()
 		3:
+			_set_status("地图页为点击即存（原型），无需手动保存")
+		4:
 			_save_loc_tab()
 
 
@@ -1118,6 +1148,124 @@ func _on_kf_add() -> void:
 		"t": clampf(n * 0.25, 0.0, 1.0), "x": 0.5, "y": 0.5, "strength": 1.0,
 	})
 	_rebuild_kf_rows()
+
+
+# ———————— 地图锚定原型页（等距圆柱假设）——————
+
+func _refresh_map_cities() -> void:
+	map_city_pick.clear()
+	for id in city_ids:
+		var disp := SettingsStore.city_display_name(id)
+		map_city_pick.add_item(id if disp.is_empty() else "%s（%s）" % [id, disp], 0)
+		map_city_pick.set_item_metadata(map_city_pick.item_count - 1, id)
+	var want := map_city_id if map_city_id != "" else (city_ids[0] if not city_ids.is_empty() else "")
+	map_city_id = want
+	for i in map_city_pick.item_count:
+		if str(map_city_pick.get_item_metadata(i)) == want:
+			map_city_pick.select(i)
+			break
+
+
+func _on_map_city_picked(index: int) -> void:
+	map_city_id = str(map_city_pick.get_item_metadata(index))
+	map_view.queue_redraw()
+
+
+func _on_map_load() -> void:
+	_map_dialog.popup_centered(Vector2i(820, 560))
+
+
+func _on_map_file(path: String) -> void:
+	var img := Image.load_from_file(path)
+	if img == null:
+		_set_status("参考图加载失败：%s" % path)
+		return
+	map_texture = ImageTexture.create_from_image(img)
+	map_view.queue_redraw()
+	_set_status("参考图已加载（%d×%d）——点击地图给城市定点经纬度" % [img.get_width(), img.get_height()])
+
+
+## 参考图在 MapView 内的适配矩形（保持纵横比，留 8px 边距）。
+func _map_fit_rect() -> Rect2:
+	if map_texture == null or map_view.size.x <= 0 or map_view.size.y <= 0:
+		return Rect2()
+	var ts := Vector2(map_texture.get_width(), map_texture.get_height())
+	var avail := map_view.size - Vector2(16, 16)
+	var scale := minf(avail.x / ts.x, avail.y / ts.y)
+	var size := ts * scale
+	return Rect2((map_view.size - size) * 0.5, size)
+
+
+func _latlong_to_px(lati: float, long: float, rect: Rect2) -> Vector2:
+	return Vector2(
+		rect.position.x + (long + 180.0) / 360.0 * rect.size.x,
+		rect.position.y + (90.0 - lati) / 180.0 * rect.size.y)
+
+
+func _px_to_latlong(px: Vector2, rect: Rect2) -> Vector2:
+	return Vector2(
+		90.0 - (px.y - rect.position.y) / rect.size.y * 180.0,
+		(px.x - rect.position.x) / rect.size.x * 360.0 - 180.0)
+
+
+func _draw_map_view() -> void:
+	var rect := _map_fit_rect()
+	if rect.size == Vector2.ZERO:
+		var f := get_theme_default_font()
+		map_view.draw_string(f, Vector2(12, 24), "先点“加载参考图…”（等距圆柱：全图 = 经度 -180..180，纬度 90..-90）",
+				HORIZONTAL_ALIGNMENT_LEFT, -1, 14, Color(0.7, 0.76, 0.86))
+		return
+	# 经纬网格（每 30°）
+	for i in range(13):
+		var x := rect.position.x + rect.size.x * i / 12.0
+		map_view.draw_line(Vector2(x, rect.position.y), Vector2(x, rect.end.y),
+				Color(1, 1, 1, 0.08), 1.0)
+	for i in range(7):
+		var y := rect.position.y + rect.size.y * i / 6.0
+		map_view.draw_line(Vector2(rect.position.x, y), Vector2(rect.end.x, y),
+				Color(1, 1, 1, 0.08), 1.0)
+	if map_texture != null:
+		map_view.draw_texture_rect(map_texture, rect, false)
+	# 城市标记
+	for id in city_ids:
+		var cd := SettingsStore.load_city(id)
+		var lati := float(cd.get("lati", 0.0))
+		var long := float(cd.get("long", 0.0))
+		var pos := _latlong_to_px(lati, long, rect)
+		var is_current := id == map_city_id
+		var col := Color(1.0, 0.72, 0.30) if is_current else Color(0.55, 0.8, 1.0)
+		map_view.draw_circle(pos, 6.0 if is_current else 4.0, col)
+		if is_current:
+			map_view.draw_arc(pos, 10.0, 0, TAU, 24, Color(1.0, 0.72, 0.30, 0.9), 2.0)
+		var name := SettingsStore.city_display_name(id)
+		if name.is_empty():
+			name = id
+		map_view.draw_string(get_theme_default_font(), pos + Vector2(12, -6),
+				name, HORIZONTAL_ALIGNMENT_LEFT, -1, 13, col)
+
+
+func _on_map_gui_input(event: InputEvent) -> void:
+	if event is InputEventMouseButton and event.pressed and event.button_index == MOUSE_BUTTON_LEFT:
+		var rect := _map_fit_rect()
+		var pos: Vector2 = (event as InputEventMouseButton).position
+		if rect.size == Vector2.ZERO or not rect.has_point(pos):
+			return
+		var ll := _px_to_latlong(pos, rect)
+		if map_city_id.is_empty():
+			_set_status("请先在地图页选择要定位的城市")
+			return
+		# 点击即存（原型）：写入城市 JSON，经纬度取两位小数
+		var cd := SettingsStore.load_city(map_city_id)
+		cd["long"] = snappedf(ll.y, 0.01)
+		cd["lati"] = snappedf(ll.x, 0.01)
+		var err := SettingsStore.save_city(map_city_id, cd)
+		if err == OK:
+			_refresh_cities()
+			_refresh_map_cities()
+			map_view.queue_redraw()
+			_set_status("已将 %s 定位到 %.2f°, %.2f°（等距圆柱假设）" % [map_city_id, cd.lati, cd.long])
+		else:
+			_set_status("写入失败（%d）" % err)
 
 
 # ———————— 工具 ————————

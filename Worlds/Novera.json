@@ -4,13 +4,13 @@
 	"base_dates": [
 		{
 			"id": "xnidnisia",
-			"offset_days": 3000277
+			"offset_days": 3000277.0
 		}
 	],
 	"base_times": [
 		{
 			"id": "hmt",
-			"offset_minutes": -420
+			"offset_minutes": 0
 		}
 	],
 	"day_hours": 24.0,

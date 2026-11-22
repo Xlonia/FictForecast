@@ -263,13 +263,13 @@ func _refresh_day() -> void:
 	low_value.text = "%.0f°C" % rep["low"]
 	rain_value.text = "%d%%" % roundi(rep["rain_prob"] * 100.0)
 	if current_sky == SkyKind.RAINY:
-		flavor_label.text = "种子 %s · 今日降水 %.1f mm%s · 湿度 %.0f%%" % [
+		flavor_label.text = "种子 %s · 今日降水 %.1f mm%s · 风 %.1f m/s · 湿度 %.0f%%" % [
 			rep["seed_key"], rep.get("precip_mm", 0.0),
-			"（雪）" if is_snow else "", rep.get("humidity", 0.0),
+			"（雪）" if is_snow else "", rep.get("wind", 0.0), rep.get("humidity", 0.0),
 		]
 	else:
-		flavor_label.text = "种子 %s · 日日照 %.1f 小时 · 湿度 %.0f%%" % [
-			rep["seed_key"], rep["sun_daily"], rep.get("humidity", 0.0),
+		flavor_label.text = "种子 %s · 日日照 %.1f 小时 · 风 %.1f m/s · 湿度 %.0f%%" % [
+			rep["seed_key"], rep["sun_daily"], rep.get("wind", 0.0), rep.get("humidity", 0.0),
 		]
 	_update_status()
 
