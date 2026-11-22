@@ -20,7 +20,47 @@ const ANCHOR_DAY := 2
 const INT_MASK := 0x7FFFFFFF  # 名字码折叠上限 2^31，避免 64 位乘法溢出
 const NAME_CODE_EMPTY := 0x1E3779B9  # 空世界名兜底常量（确定性，非 0——豆包意见：避免 0 值歧义）
 
-static var _noise_cache := {}  # world_id -> FastNoiseLite（平滑日噪声复用）
+static var _noise_cache := {}   # "world|freq" -> FastNoiseLite（平滑日噪声/城市噪点复用）
+static var _field_cache := {}   # "world|field" -> FastNoiseLite（图表随机柏林面复用）
+
+# —— 图表随机柏林面（批复：城市图表随机 = 世界宏观柏林噪音面，城市以经纬度读高度）——
+# 与未来的气候现象柏林面相互独立：不同“面”按 id 对种子做修饰（十六进制插入法）。
+const FIELD_TEMPERATURE := 0    # 图表随机·温度面
+const FIELD_PRECIPITATION := 1  # 图表随机·降水比面
+
+
+## 函数图种子修饰（批复口径）：种子转十六进制，函数图 id 以两位十六进制插入末尾，
+## 再转回十进制。基底取十六进制末 14 位（56 位）+ 2 位 = 64 位，不会溢出。
+static func field_seed(base_seed: int, field_id: int) -> int:
+	var hex := "%x" % (base_seed & 0x0FFFFFFFFFFFFFFF)
+	if hex.length() > 14:
+		hex = hex.substr(hex.length() - 14)
+	hex += "%02x" % (field_id & 0xFF)
+	return hex.hex_to_int()
+
+
+## 读取图表随机柏林面：城市以经纬度在圆筒面采样（±180° 经线连续），返回约 -1..1。
+## 面的种子 = field_seed(世界名数字码, 面id)；绘制柏林面在世界地图上是 m5 的工作，
+## v1 的面由种子程序化生成（“半占位半完善”）。
+static func chart_field(world_id: String, field_id: int, lati: float, long: float) -> float:
+	var ck := "%s|%d" % [world_id, field_id]
+	var n: FastNoiseLite
+	if _field_cache.has(ck):
+		n = _field_cache[ck]
+	else:
+		n = FastNoiseLite.new()
+		n.noise_type = FastNoiseLite.TYPE_PERLIN
+		n.seed = field_seed(name_code(world_id), field_id)
+		n.frequency = 0.02
+		_field_cache[ck] = n
+	var ang := deg_to_rad(long)
+	return n.get_noise_3d(cos(ang) * 1000.0, sin(ang) * 1000.0, lati * 10.0)
+
+
+## 世界时钟换算（批复口径）：现实 UTC + 时间系统偏差(分) + 历法锚定(天) → 显示日期时间。
+## 用于“时间的异质感”——例如 Novera 锚定 +3000277 天 ≈ 公元 10240 年。
+static func display_datetime(unix_utc: float, tz_min: int, cal_days: int) -> Dictionary:
+	return Time.get_datetime_dict_from_unix_time(int(unix_utc) + tz_min * 60 + cal_days * 86400)
 
 
 ## 恒定日历日序号（**日期轨**）：自锚点（1970-01-02）起算；锚点之前绕锚点镜像折返为正。

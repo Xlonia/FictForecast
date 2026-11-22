@@ -180,6 +180,21 @@ func _init() -> void:
 			var td: float = WeatherEngine._dewpoint_from(t, rh)
 			var back: float = WeatherEngine._rh_from(t, td)
 			_check(absf(back - rh) < 0.5, "露点往返 t=%.0f rh=%.0f → %.1f%%" % [t, rh, back])
+
+	# —— 11. 图表随机柏林面 + 世界时钟换算 ——
+	var fs0 := WorldRng.field_seed(12345, 0)
+	var fs1 := WorldRng.field_seed(12345, 1)
+	_check(fs0 == WorldRng.field_seed(12345, 0), "函数图种子恒定（十六进制插入法）")
+	_check(fs0 != fs1, "不同函数图 id 种子不同")
+	var ft := WorldRng.chart_field("Novera", WorldRng.FIELD_TEMPERATURE, 31.2, 121.5)
+	var ft2 := WorldRng.chart_field("Novera", WorldRng.FIELD_TEMPERATURE, 31.3, 121.6)
+	_check(absf(ft - ft2) < 0.1, "温度面相邻坐标平滑（%.3f vs %.3f）" % [ft, ft2])
+	var dt0 := WorldRng.display_datetime(0.0, 0, 0)
+	_check(dt0.year == 1970 and dt0.month == 1 and dt0.day == 1 and dt0.hour == 0, "历法零点换算")
+	var dt_tz := WorldRng.display_datetime(0.0, 420, 0)
+	_check(dt_tz.hour == 7, "时区叠加 +420 分 → 07:00")
+	var dt_cal := WorldRng.display_datetime(0.0, 0, 3000277)
+	_check(dt_cal.year > 10000, "历法锚定 +3000277 天 → 万年历（%d 年）" % dt_cal.year)
 	_finish()
 
 

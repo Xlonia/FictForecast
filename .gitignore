@@ -3,9 +3,10 @@
 Climate/*.translation
 export/
 
-# —— 人机共建内部文档（批复/审计/报告/设计稿等 markdown）——
-# 默认不同步到 GitHub：避免误导引用、构建、分叉本仓库的他人 AI；作者自行筛选后再发布
+# —— 人机共建内部文档（批复/审计/报告等）——
+# 默认不同步：避免误导引用、构建、分叉本仓库的他人 AI；作者自行筛选后再发布
+# 例外：根目录的 markdown 对外展示（README、幻想气象局.md 设计文档等）
 *.md
-!README.md
+!/*.md
 aiTests/
 workbench/

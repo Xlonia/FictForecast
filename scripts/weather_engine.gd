@@ -21,8 +21,9 @@ extends RefCounted
 ## month_temp_sigma / month_smoothing / monthly_total_strength
 ## （axial_tilt_deg、day_hours、phenomena_spread_days、annual_compensation 暂未消费）
 ##
-## —— 城市噪点（批复：相近经纬度获得相近的气候偏差）——
-## city_noise × NOISE_TEMP_SCALE 作为城市站常驻温度偏置；海拔差异待接入。
+## —— 城市图表随机（m3.5 批复：宏观柏林面，城市按经纬度读高度）——
+## 温度面 → 站点温度偏置 ±1.5℃；降水比面 → 年降水比偏置 ±0.10。
+## 与旧 city_noise（未按面 id 修饰）相比，面种子经十六进制 id 插入，可与现象面区分。
 ##
 ## —— 随机评分筛选（硬否决前置→方案一择优）尚未实装，月度预生成即其前置结构。
 
@@ -99,9 +100,10 @@ func _generate_month(year: int, month: int) -> Dictionary:
 	var rng_year := WorldRng.rng_from_seed(seeds.year_seed)
 	var rng_month := WorldRng.rng_from_seed(seeds.month_seed)
 
-	# —— 年度 / 月度差异（批复：每年每月同期波动）——
+	# —— 年度 / 月度差异（批复：每年每月同期波动）+ 城市图表随机面偏置 ——
 	var year_temp_a := rng_year.randfn(0.0, YEAR_TEMP_SIGMA)
-	var year_precip := clampf(1.0 + rng_year.randfn(0.0, YEAR_PRECIP_SIGMA), 0.6, 1.5)
+	var year_precip := clampf(1.0 + rng_year.randfn(0.0, YEAR_PRECIP_SIGMA)
+			+ _city_precip_bias(), 0.6, 1.5)
 	var month_temp_a := rng_month.randfn(0.0, MONTH_TEMP_SIGMA)
 	var city_offset := _city_temp_offset()
 
@@ -301,7 +303,17 @@ func _blend(key: String, month: int, day: int, year: int) -> float:
 func _city_temp_offset() -> float:
 	if world_id.is_empty() or city.is_empty():
 		return 0.0
-	return WorldRng.city_noise(world_id, float(city.get("lati", 0.0)), float(city.get("long", 0.0))) * NOISE_TEMP_SCALE
+	# 图表随机·温度面：城市经纬度读高度 → 站点温度偏置
+	return WorldRng.chart_field(world_id, WorldRng.FIELD_TEMPERATURE,
+			float(city.get("lati", 0.0)), float(city.get("long", 0.0))) * NOISE_TEMP_SCALE
+
+
+## 图表随机·降水比面：城市经纬度读高度 → 年降水比偏置（±0.10）
+func _city_precip_bias() -> float:
+	if world_id.is_empty() or city.is_empty():
+		return 0.0
+	return WorldRng.chart_field(world_id, WorldRng.FIELD_PRECIPITATION,
+			float(city.get("lati", 0.0)), float(city.get("long", 0.0))) * 0.10
 
 
 func _worldf(key: String, fallback: float) -> float:

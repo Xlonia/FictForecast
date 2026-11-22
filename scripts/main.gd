@@ -12,6 +12,7 @@ const DATA_DIR := "res://Climate"
 const ID_RELOAD := 100
 const ID_NEXT_DAY := 101
 const ID_EDITOR := 103
+const ID_RESUME_NOW := 104
 const ID_QUIT := 102
 const ID_HELP_GUIDE := 200
 const ID_HELP_ABOUT := 201
@@ -63,9 +64,12 @@ var climate: ClimateData = null
 var engine: WeatherEngine = null
 
 var sim_date := {"year": 2026, "month": 1, "day": 1}
-var time_of_day := 0.0        # 当日 0:00 起经过的秒数
+var sim_unix := 0.0           # 世界 Unix 时间（已含历法锚定与时区叠加——时间的异质感）
+var world_time_offset := 0.0  # 总偏移秒数 = 时间系统偏差 + 城市时区差 + 历法锚定
+var time_of_day := 0.0        # 当日 0:00 起经过的秒数（显示帧内派生）
 var time_speed := 1.0         # 默认与系统时间同步（m3 批复：1秒过1分钟太吓人）
 var current_sky: int = SkyKind.SUNNY
+var _last_date_key := ""
 
 var city_menu: PopupMenu
 var speed_menu: PopupMenu
@@ -96,11 +100,9 @@ func _ready() -> void:
 	_build_month_rows()
 	_build_menus()
 	_build_dialogs()
-	var now := Time.get_datetime_dict_from_system(false)
-	sim_date = {"year": now.year, "month": now.month, "day": now.day}
-	time_of_day = float(now.hour * 3600 + now.minute * 60 + now.second)
 	background.color = _sky_bg_color()
 	_reload_climates()
+	_apply_world_time()
 	# m3 批复小修：启动时容器可能未随字体度量完成重排（面板排开），延迟强制重排
 	await get_tree().process_frame
 	await get_tree().process_frame
@@ -125,28 +127,68 @@ func _process(delta: float) -> void:
 	background.color = background.color.lerp(_sky_bg_color(), minf(delta * 2.5, 1.0))
 
 
-# —— 时间 ——
+# —— 时间（历法锚定 + 时区叠加：时间的异质感）——
+
+## 解析当前城市的时间上下文：时间系统偏差(分) + 城市时区差(分) + 历法锚定(天)。
+## 非法/留空 → UTC/公历（批复口径）。返回也带 id，供状态栏展示。
+func _time_context() -> Dictionary:
+	var tz_min := 0
+	var cal_days := 0
+	var times_id := "UTC"
+	var cal_id := "公历"
+	if climate != null:
+		var cd := SettingsStore.load_city(climate.city_name)
+		var wid := str(cd.get("world", ""))
+		tz_min += int(cd.get("timez", 0))
+		if wid != "" and SettingsStore.list_world_ids().has(wid):
+			var w := SettingsStore.load_world(wid)
+			var want_t := str(cd.get("times", ""))
+			var want_c := str(cd.get("calendar", ""))
+			for bt in w.get("base_times", []):
+				if str(bt.get("id", "")) == want_t:
+					tz_min += int(bt.get("offset_minutes", 0))
+					times_id = want_t
+			for bd in w.get("base_dates", []):
+				if str(bd.get("id", "")) == want_c:
+					cal_days += int(bd.get("offset_days", 0))
+					cal_id = want_c
+	return {"tz_min": tz_min, "cal_days": cal_days, "times_id": times_id, "cal_id": cal_id}
+
+
+## 以现实时刻为锚，应用世界时间偏移（“恢复现在”也走这里）。
+func _apply_world_time() -> void:
+	var ctx := _time_context()
+	world_time_offset = ctx["tz_min"] * 60.0 + ctx["cal_days"] * 86400.0
+	sim_unix = Time.get_unix_time_from_system() + world_time_offset
+	_last_date_key = ""
+	_sync_date_from_clock()
+	_update_clock()
+
+
+func _sync_date_from_clock() -> void:
+	var dt := Time.get_datetime_dict_from_unix_time(int(sim_unix))
+	var key := "%04d-%02d-%02d" % [dt.year, dt.month, dt.day]
+	if key != _last_date_key:
+		_last_date_key = key
+		sim_date = {"year": dt.year, "month": dt.month, "day": dt.day}
+		_refresh_day()
+
 
 func _advance_time(seconds: float) -> void:
 	if seconds <= 0.0:
 		return
-	time_of_day += seconds
-	while time_of_day >= 86400.0:
-		time_of_day -= 86400.0
-		sim_date = WeatherEngine.next_date(sim_date.year, sim_date.month, sim_date.day)
-		_refresh_day()
+	sim_unix += seconds
+	_sync_date_from_clock()
 
 
 @warning_ignore("integer_division")
 func _update_clock() -> void:
-	var t := int(time_of_day)
-	var hh := t / 3600
-	var mm := (t % 3600) / 60
-	var ss := t % 60
-	var wd := _weekday(sim_date.year, sim_date.month, sim_date.day)
+	var dt := Time.get_datetime_dict_from_unix_time(int(sim_unix))
+	time_of_day = float(dt.hour * 3600 + dt.minute * 60 + dt.second)
+	var wd := _weekday(dt.year, dt.month, dt.day)
 	clock_label.text = "%04d年%02d月%02d日 %s  %02d:%02d:%02d" % [
-		sim_date.year, sim_date.month, sim_date.day,
-		WEEKDAY_NAMES[wd], hh, mm, ss,
+		dt.year, dt.month, dt.day,
+		WEEKDAY_NAMES[wd], dt.hour, dt.minute, dt.second,
 	]
 
 
@@ -255,15 +297,17 @@ func _update_status() -> void:
 	var skipped := ""
 	if climate.skipped_rows > 0:
 		skipped = " · 跳过 %d 行" % climate.skipped_rows
-	# 城市基础数据（Cities/<ID>.json）：坐标、海拔、所属世界、时区
+	# 城市基础数据（Cities/<ID>.json）：坐标、海拔、所属世界、历法、时间系统
 	var cd := SettingsStore.load_city(climate.city_name)
+	var ctx := _time_context()
 	var world_shown := "—"
 	if str(cd.world) != "":
 		var wd := SettingsStore.world_display_name(str(cd.world))
 		world_shown = str(cd.world) if wd.is_empty() else wd
-	status_label.text = "城市：%s（%.1f°, %.1f°, %.0fm · 世界 %s · 时区 %+d 分）　·　数据：%s　·　机制：三层种子 + 月度确定性生成（雨日锁定/降水对账/距平零和/露点中介）%s%s" % [
+	status_label.text = "城市：%s（%.1f°, %.1f°, %.0fm · 世界 %s · 历法 %s · 时间系统 %s · 时区 %+d 分）　·　数据：%s　·　机制：三层种子 + 月度确定性生成（雨日锁定/降水对账/距平零和/露点中介）%s%s" % [
 		_city_label(climate.city_name), float(cd.long), float(cd.lati), float(cd.alti),
-		world_shown, int(cd.timez), climate.source_path.get_file(), extra, skipped,
+		world_shown, ctx["cal_id"], ctx["times_id"], int(cd.timez),
+		climate.source_path.get_file(), extra, skipped,
 	]
 
 
@@ -306,6 +350,7 @@ func _build_menus() -> void:
 
 	m.add_item("重新加载气候数据", ID_RELOAD)
 	m.add_item("跳到下一日", ID_NEXT_DAY)
+	m.add_item("恢复现在", ID_RESUME_NOW)
 	m.add_item("设置编辑器", ID_EDITOR)
 	m.add_separator()
 	m.add_item("退出", ID_QUIT)
@@ -364,9 +409,11 @@ func _on_main_menu(id: int) -> void:
 		ID_RELOAD:
 			_reload_climates()
 		ID_NEXT_DAY:
-			sim_date = WeatherEngine.next_date(sim_date.year, sim_date.month, sim_date.day)
-			time_of_day = 0.0
-			_refresh_day()
+			sim_unix += 86400.0
+			_sync_date_from_clock()
+			_update_clock()
+		ID_RESUME_NOW:
+			_apply_world_time()
 			_update_clock()
 		ID_EDITOR:
 			_open_settings_editor()
