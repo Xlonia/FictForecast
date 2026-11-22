@@ -18,6 +18,9 @@ const ANCHOR_YEAR := 1970
 const ANCHOR_MONTH := 1
 const ANCHOR_DAY := 2
 const INT_MASK := 0x7FFFFFFF  # 名字码折叠上限 2^31，避免 64 位乘法溢出
+const NAME_CODE_EMPTY := 0x1E3779B9  # 空世界名兜底常量（确定性，非 0——豆包意见：避免 0 值歧义）
+
+static var _noise_cache := {}  # world_id -> FastNoiseLite（平滑日噪声复用）
 
 
 ## 恒定日历日序号（**日期轨**）：自锚点（1970-01-02）起算；锚点之前绕锚点镜像折返为正。
@@ -46,14 +49,13 @@ static func mirror_year(year: int) -> int:
 	return year if year >= ANCHOR_YEAR else 2 * ANCHOR_YEAR - year
 
 
-## 世界名“逆编码 → 十进制化”：倒序后按 Unicode 码点做 Horner 折叠。
-## 不同名字几乎必然得到不同数字；同名恒定。
+## 世界名“逆编码 → 十进制化”：倒序后按 UTF-8 字节展开，交由引擎 64 位混合哈希
+## （m3 采纳豆包意见：Unicode 码点/字节展开不限 ASCII——支持虚构语言名；
+##  混合本身完成分异，不需要额外校验字符；空名给确定性常量，非 0）。
 static func name_code(world_id: String) -> int:
-	var s := world_id.reverse()
-	var code := 0
-	for ch in s:
-		code = (code * 0x110000 + ch.unicode_at(0)) & INT_MASK
-	return code
+	if world_id.is_empty():
+		return NAME_CODE_EMPTY
+	return hash(world_id.reverse().to_utf8_buffer())
 
 
 ## 三层种子：年度 / 月度 / 日期（批复：世界随机构思）。
@@ -83,10 +85,27 @@ static func rng_from_seed(seed: int) -> RandomNumberGenerator:
 ## 在经度圆筒面上采 3D 柏林噪音，保证 ±180° 经线连续。返回约 -1..1。
 ## 海拔不进噪音本体——批复要求海拔做“特定时刻各日间同期的随机差异”，由引擎层使用。
 static func city_noise(world_id: String, lati: float, long: float, frequency := 0.02) -> float:
+	var n := _noise_for(world_id, frequency)
+	var ang := deg_to_rad(long)
+	# 圆筒面采样：经度 → 圆周角度，纬度作第三维；半径取 1000 仅为把角度换成长度尺度
+	return n.get_noise_3d(cos(ang) * 1000.0, sin(ang) * 1000.0, lati * 10.0)
+
+
+## 平滑日噪声（月内平滑轨道）：按恒定日序采 2D 柏林噪音，相邻日期平滑连续。
+## 返回约 -1..1。天气引擎用它做“低频平滑项”，与日种子原始噪声按 month_smoothing 插值。
+## frequency 0.15 ≈ 相邻两天部分相关、一周尺度上有起伏。
+static func smooth_day_noise(world_id: String, day_number: int, frequency := 0.15) -> float:
+	var n := _noise_for(world_id, frequency)
+	return n.get_noise_2d(float(day_number), float((name_code(world_id) >> 8) & 0xFFFF))
+
+
+static func _noise_for(world_id: String, frequency: float) -> FastNoiseLite:
+	var cache_key := "%s|%f" % [world_id, frequency]
+	if _noise_cache.has(cache_key):
+		return _noise_cache[cache_key]
 	var n := FastNoiseLite.new()
 	n.noise_type = FastNoiseLite.TYPE_PERLIN
 	n.seed = name_code(world_id)
 	n.frequency = frequency
-	var ang := deg_to_rad(long)
-	# 圆筒面采样：经度 → 圆周角度，纬度作第三维；半径取 1000 仅为把角度换成长度尺度
-	return n.get_noise_3d(cos(ang) * 1000.0, sin(ang) * 1000.0, lati * 10.0)
+	_noise_cache[cache_key] = n
+	return n

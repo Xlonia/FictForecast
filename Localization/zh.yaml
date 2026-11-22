@@ -1,9 +1,10 @@
 cities:
-  lioepprosia: Lioepprosia
-  myksolonia: Myksolonia
+  lioepprosia: 洛沅
+  myksolonia: 瑰流
 
 worlds:
   default: 现实世界
+  Novera: Novera
 
 phenomena:
   subtropical_high: 副热带高压（示例）

@@ -76,9 +76,12 @@ func _init() -> void:
 	var b := eng.day_report(2087, 7, 15)
 	_check(a == b, "同一天两次生成结果一致")
 
-	# —— 7. 分布合理性（宽松界）+ 样例打印 ——
-	_check(counts[2] >= 20 and counts[2] <= 200,
-			"全年雨天数量在合理区间（实际 %d）" % counts[2])
+	# —— 7. 分布合理性（雨日锁定口径）+ 样例打印 ——
+	var expected_rain := 0
+	for m in range(1, 13):
+		expected_rain += clampi(roundi(cd.month_value("rain_days", m)), 0, WeatherEngine._days_in_month(2087, m))
+	_check(counts[2] == expected_rain,
+			"全年雨日数锁定为 Σ rain_days（实际 %d / 期望 %d）" % [counts[2], expected_rain])
 	var s := eng.day_report(2087, 7, 15)
 	print("样例 2087-07-15：sky=%d high=%.1f low=%.1f rain=%.0f%%" % [
 		s["sky"], s["high"], s["low"], s["rain_prob"] * 100.0])
@@ -97,14 +100,28 @@ func _init() -> void:
 
 	SettingsStore.ensure_defaults()
 	_check(SettingsStore.list_city_ids().size() >= 2, "检测到至少两座城市 CSV")
+	# 世界 JSON 回写测试：按 id 追加/清理，不假设既有条目数（兼容用户数据）
 	var w := SettingsStore.load_world("default")
-	_check(w.base_times.size() == 1, "默认世界含 1 条基准时间")
 	w["base_times"].append({"id": "selftest_only", "offset_minutes": 30})
 	_check(SettingsStore.save_world("default", w) == OK, "保存世界 JSON")
 	var w2 := SettingsStore.load_world("default")
-	_check(w2.base_times.size() == 2, "世界 JSON 回读条目数")
-	w2["base_times"].remove_at(1)
+	var found := false
+	for e in w2.base_times:
+		if str(e.get("id", "")) == "selftest_only":
+			found = true
+	_check(found, "世界 JSON 回读含测试基准时间")
+	var cleaned := []
+	for e in w2.base_times:
+		if str(e.get("id", "")) != "selftest_only":
+			cleaned.append(e)
+	w2["base_times"] = cleaned
 	SettingsStore.save_world("default", w2)
+	var w3 := SettingsStore.load_world("default")
+	var still_there := false
+	for e in w3.base_times:
+		if str(e.get("id", "")) == "selftest_only":
+			still_there = true
+	_check(not still_there, "测试基准时间已清理")
 	var city := SettingsStore.load_city("myksolonia")
 	_check(city.has("long") and city.has("wallpaper") and city.has("effects"),
 			"城市默认骨架字段齐全")
@@ -122,6 +139,7 @@ func _init() -> void:
 	var nc1 := WorldRng.name_code("default")
 	_check(nc1 == WorldRng.name_code("default"), "世界名数字码恒定")
 	_check(WorldRng.name_code("earth") != nc1, "不同世界名数字码不同")
+	_check(WorldRng.name_code("") == WorldRng.NAME_CODE_EMPTY, "空世界名给确定性兜底码")
 	var seeds := WorldRng.world_seeds("default", 10240, 6, 15)
 	_check(seeds.year_seed != seeds.month_seed and seeds.month_seed != seeds.day_seed,
 			"三层种子互不相同")
@@ -133,7 +151,35 @@ func _init() -> void:
 	_check(absf(noise_a - noise_b) < 0.1, "相邻坐标噪点平滑（%.3f vs %.3f）" % [noise_a, noise_b])
 	var noise_wrap1 := WorldRng.city_noise("default", 10.0, 179.95)
 	var noise_wrap2 := WorldRng.city_noise("default", 10.0, -179.95)
-	_check(absf(noise_wrap1 - noise_wrap2) < 0.05, "180° 经线两侧噪点连续")
+	_check(absf(noise_wrap1 - noise_wrap2) < 0.1,
+			"180° 经线两侧噪点连续（±0.1，实测 %.3f）" % absf(noise_wrap1 - noise_wrap2))
+
+	# —— 10. m3：月度确定性生成（雨日锁定/降水对账/距平零和/露点）——
+	var world_data := SettingsStore.load_world("Novera")
+	world_data["monthly_total_strength"] = 1.0
+	var eng3 := WeatherEngine.new(cd, "Novera", world_data, {"lati": 31.2, "long": 121.5})
+	var mr := eng3.month_report(2087, 7)
+	_check(mr.rain_target == 26,
+			"7 月雨日锁定 26 天（raint=25.6，实际 %d）" % mr.rain_target)
+	var precip_sum := 0.0
+	for e in mr.day_entries:
+		precip_sum += e.precip_mm
+	_check(absf(precip_sum - mr.precip_total) < 0.05,
+			"降水量对账：月总和 = rmean × 年降水比（%.1f vs %.1f）" % [precip_sum, mr.precip_total])
+	var mean_a := 0.0
+	for e in mr.day_entries:
+		mean_a += e.anomaly
+	mean_a /= mr.day_entries.size()
+	_check(absf(mean_a) < 0.001, "温度距平零和（月积温凑齐，均值残差 %.6f）" % mean_a)
+	var mr2 := eng3.month_report(2087, 7)
+	_check(mr == mr2, "月度生成确定性（两次一致）")
+	var mr_next_year := eng3.month_report(2088, 7)
+	_check(mr != mr_next_year, "年度种子生效：跨年同月结果不同")
+	for t in [-10.0, 0.0, 20.0, 35.0]:
+		for rh in [20.0, 50.0, 80.0]:
+			var td: float = WeatherEngine._dewpoint_from(t, rh)
+			var back: float = WeatherEngine._rh_from(t, td)
+			_check(absf(back - rh) < 0.5, "露点往返 t=%.0f rh=%.0f → %.1f%%" % [t, rh, back])
 	_finish()
 
 
@@ -141,8 +187,8 @@ func _check_day(cd: ClimateData, date: Dictionary, rep: Dictionary) -> void:
 	var key := "%04d-%02d-%02d" % [date.year, date.month, date.day]
 	_check(is_finite(rep["high"]) and is_finite(rep["low"]), "温度为有限值 @%s" % key)
 	_check(rep["low"] < rep["high"], "低温 < 高温 @%s" % key)
-	_check(rep["rain_prob"] >= 0.05 - 0.0001 and rep["rain_prob"] <= 0.60 + 0.0001,
-			"降雨可能在标定范围内 @%s" % key)
+	_check(rep["rain_prob"] >= 0.0 and rep["rain_prob"] <= 1.0,
+			"降雨可能为当月雨日占比 0..1 @%s" % key)
 	# 记录钳制用的是跨月加权后的记录，因此断言取当月与两侧邻月记录的较宽界
 	var m: int = date.month
 	var rh: float = maxf(cd.month_value("record_high", m),

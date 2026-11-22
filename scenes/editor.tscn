@@ -687,7 +687,24 @@ theme_override_constants/separation = 8
 [node name="LocHint" type="Label" parent="Root/Column/Tabs/LocTab"]
 layout_mode = 2
 theme_override_colors/font_color = Color(0.55, 0.62, 0.72, 1)
-text = "res://Localization/zh.yaml —— 组: 键: 值（受限 YAML 子集）；城市与世界名称在这里改"
+text = "res://Localization/<语言>.yaml —— 每个语言一个子页签；组: 键: 值（受限 YAML 子集）"
+
+[node name="LocTop" type="HBoxContainer" parent="Root/Column/Tabs/LocTab"]
+layout_mode = 2
+theme_override_constants/separation = 8
+
+[node name="LangPick" type="OptionButton" parent="Root/Column/Tabs/LocTab/LocTop"]
+layout_mode = 2
+size_flags_horizontal = 3
+
+[node name="NewLangEdit" type="LineEdit" parent="Root/Column/Tabs/LocTab/LocTop"]
+custom_minimum_size = Vector2(150, 0)
+layout_mode = 2
+placeholder_text = "新语言代码，如 en"
+
+[node name="NewLangBtn" type="Button" parent="Root/Column/Tabs/LocTab/LocTop"]
+layout_mode = 2
+text = "创建语言"
 
 [node name="LocScroll" type="ScrollContainer" parent="Root/Column/Tabs/LocTab"]
 layout_mode = 2
@@ -730,7 +747,7 @@ layout_mode = 2
 size_flags_horizontal = 3
 theme_override_colors/font_color = Color(0.55, 0.62, 0.72, 1)
 theme_override_font_sizes/font_size = 13
-text = "修改只在“保存当前页”时写盘；切换选择会丢弃未保存改动"
+text = "改动先存内存草稿（关闭时会询问处理）；「保存当前页」立即落盘"
 
 [node name="SaveBtn" type="Button" parent="Root/Column/Bottom"]
 layout_mode = 2

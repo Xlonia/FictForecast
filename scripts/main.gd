@@ -64,7 +64,7 @@ var engine: WeatherEngine = null
 
 var sim_date := {"year": 2026, "month": 1, "day": 1}
 var time_of_day := 0.0        # 当日 0:00 起经过的秒数
-var time_speed := 60.0        # 默认 1 真实秒 = 1 游戏分钟
+var time_speed := 1.0         # 默认与系统时间同步（m3 批复：1秒过1分钟太吓人）
 var current_sky: int = SkyKind.SUNNY
 
 var city_menu: PopupMenu
@@ -101,6 +101,11 @@ func _ready() -> void:
 	time_of_day = float(now.hour * 3600 + now.minute * 60 + now.second)
 	background.color = _sky_bg_color()
 	_reload_climates()
+	# m3 批复小修：启动时容器可能未随字体度量完成重排（面板排开），延迟强制重排
+	await get_tree().process_frame
+	await get_tree().process_frame
+	$Margin/Column/Body.queue_sort()
+	$Margin/Column.queue_sort()
 	# 开发辅助：FF_OPEN_EDITOR=1 或命令行追加 `-- --open-editor` 启动时直接打开设置编辑器
 	if OS.get_environment("FF_OPEN_EDITOR") == "1" or OS.get_cmdline_user_args().has("--open-editor"):
 		_open_settings_editor.call_deferred()
@@ -174,9 +179,21 @@ func _reload_climates() -> void:
 			break
 	if climate == null and not climates.is_empty():
 		climate = climates[0]
-	engine = WeatherEngine.new(climate) if climate != null else null
+	engine = _build_engine()
 	_rebuild_city_menu()
 	_refresh_day()
+
+
+## 构造天气引擎：接入世界（三层种子/波动参数）与城市（噪点/坐标）上下文。
+func _build_engine() -> WeatherEngine:
+	if climate == null:
+		return null
+	var city_data := SettingsStore.load_city(climate.city_name)
+	var wid := str(city_data.get("world", ""))
+	var world_data := {}
+	if wid != "" and SettingsStore.list_world_ids().has(wid):
+		world_data = SettingsStore.load_world(wid)
+	return WeatherEngine.new(climate, wid, world_data, city_data)
 
 
 # —— 界面刷新 ——
@@ -197,14 +214,21 @@ func _refresh_day() -> void:
 	var rep := engine.day_report(sim_date.year, sim_date.month, sim_date.day)
 	current_sky = rep["sky"]
 	weather_icon.sky = current_sky
-	weather_name.text = SKY_NAMES[current_sky]
-	weather_desc.text = SKY_DESC[current_sky]
+	var is_snow: bool = rep.get("snow", false)
+	weather_name.text = "雪" if is_snow else SKY_NAMES[current_sky]
+	weather_desc.text = "低温降水，落地成雪" if is_snow else SKY_DESC[current_sky]
 	high_value.text = "%.0f°C" % rep["high"]
 	low_value.text = "%.0f°C" % rep["low"]
 	rain_value.text = "%d%%" % roundi(rep["rain_prob"] * 100.0)
-	flavor_label.text = "种子 %s · 日日照 %.1f 小时 · 湿度 %s" % [
-		rep["seed_key"], rep["sun_daily"], _fmt(rep["humidity"], "%.0f%%"),
-	]
+	if current_sky == SkyKind.RAINY:
+		flavor_label.text = "种子 %s · 今日降水 %.1f mm%s · 湿度 %.0f%%" % [
+			rep["seed_key"], rep.get("precip_mm", 0.0),
+			"（雪）" if is_snow else "", rep.get("humidity", 0.0),
+		]
+	else:
+		flavor_label.text = "种子 %s · 日日照 %.1f 小时 · 湿度 %.0f%%" % [
+			rep["seed_key"], rep["sun_daily"], rep.get("humidity", 0.0),
+		]
 	_update_status()
 
 
@@ -237,7 +261,7 @@ func _update_status() -> void:
 	if str(cd.world) != "":
 		var wd := SettingsStore.world_display_name(str(cd.world))
 		world_shown = str(cd.world) if wd.is_empty() else wd
-	status_label.text = "城市：%s（%.1f°, %.1f°, %.0fm · 世界 %s · 时区 %+d 分）　·　数据：%s　·　机制：日期种子 + 日照加权随机（评分筛选未实装）%s%s" % [
+	status_label.text = "城市：%s（%.1f°, %.1f°, %.0fm · 世界 %s · 时区 %+d 分）　·　数据：%s　·　机制：三层种子 + 月度确定性生成（雨日锁定/降水对账/距平零和/露点中介）%s%s" % [
 		_city_label(climate.city_name), float(cd.long), float(cd.lati), float(cd.alti),
 		world_shown, int(cd.timez), climate.source_path.get_file(), extra, skipped,
 	]

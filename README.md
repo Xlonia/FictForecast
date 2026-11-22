@@ -14,6 +14,8 @@ Current version / 当前版本 / 現在のバージョン: **0.0.1classic (m2)**
 
 为了支持那些天气远离地球的世界，我们还计划支持特殊生态/气候——着力构建这个崭新的世界吧。
 
+**产品边界**：本工具消费用户填写的气候表与用户定义的现象规则，**不做气候与现象的成因模拟**——不依据地形、大气、海陆位置、植被等反演气候（做成因就是《国立幻想气候科学院》了）。
+
 ### 功能（0.0.1classic m2）
 
 - 天气预报主界面：顶栏菜单/帮助/时钟，左上日高温、低温、降雨可能，中央动画天空图标（晴/阴/雨），夜间背景变暗
@@ -62,6 +64,8 @@ FictForecast reads a monthly climate table and simulates daily temperature and w
 
 To support worlds whose weather is far from Earth's, special ecologies and climates are on the roadmap. Come build this brand-new world with us.
 
+**Product boundary**: the tool consumes user-authored climate tables and user-defined phenomenon rules; it does **not** simulate the causes of climate or weather (no terrain / atmosphere / land–sea / vegetation derivation).
+
 ### Features (0.0.1classic m2)
 
 - Forecast UI: top-bar menus/help/clock, daily high & low plus rain chance, animated sky icon (sunny/cloudy/rainy), night-dimmed backdrop
@@ -109,6 +113,8 @@ MIT — see [LICENSE](LICENSE).
 幻想気象局は月ごとの気候表を読み込み、シード付きの乱数で毎日の気温と天気をシミュレートします。台風やモンスーンのような現実の気象成因から、地球の法則を破る異常な気象ロジックまで、自由にカスタマイズ可能。気象アニメーション/フィルター、都市の風景壁紙、デスクトップ置き換えは計画中で、将来は「技術偏差」で予報と実際の気候のずれも表現できます。創作のために、そして仲間に自慢するために。
 
 地球から遠い空を持つ世界を支えるため、特殊な生態・気候もロードマップに含まれています。この新しい世界を一緒に作りましょう。
+
+**製品の境界**：本ツールはユーザー記入の気候表とユーザー定義の現象ルールを消費します。気候・気象の**成因シミュレーションは行いません**（地形・大気・海陸・植生からの導出は対象外）。
 
 ### 機能（0.0.1classic m2）
 

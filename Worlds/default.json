@@ -5,6 +5,10 @@
 		{
 			"id": "gregorian",
 			"offset_days": 0.0
+		},
+		{
+			"id": "xnidnisia",
+			"offset_days": 3000277.0
 		}
 	],
 	"base_times": [

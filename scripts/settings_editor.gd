@@ -17,7 +17,13 @@ var current_world_id := ""
 var current_world := {}
 var current_city_id := ""
 var current_city := {}
-var loc_data := {}
+var _zh_data := {}        # zh.yaml：城市/世界/现象名（主界面显示名来源）
+var _loc_lang := "zh"     # 本地化页当前语言
+var _loc_lang_data := {}  # 当前语言文件数据
+var _snapshots := {}      # 草稿快照（批复：打开时原始值，退出可回退）
+var _status_text := ""
+var _close_dialog: ConfirmationDialog
+var _dirty_timer: Timer
 
 @onready var tabs: TabContainer = $Root/Column/Tabs
 @onready var status_label: Label = $Root/Column/Bottom/StatusLabel
@@ -49,6 +55,9 @@ var loc_data := {}
 @onready var effect_add_btn: Button = $Root/Column/Tabs/CityTab/Scroll/Form/EffectSection/AddBtn
 
 # —— 本地化页 ——
+@onready var loc_lang_pick: OptionButton = $Root/Column/Tabs/LocTab/LocTop/LangPick
+@onready var loc_new_lang_edit: LineEdit = $Root/Column/Tabs/LocTab/LocTop/NewLangEdit
+@onready var loc_new_lang_btn: Button = $Root/Column/Tabs/LocTab/LocTop/NewLangBtn
 @onready var loc_rows: VBoxContainer = $Root/Column/Tabs/LocTab/LocScroll/LocRows
 @onready var loc_group_edit: LineEdit = $Root/Column/Tabs/LocTab/LocAdd/LocGroupEdit
 @onready var loc_key_edit: LineEdit = $Root/Column/Tabs/LocTab/LocAdd/LocKeyEdit
@@ -105,13 +114,15 @@ func _ready() -> void:
 	SettingsStore.ensure_defaults()
 	_refresh_worlds()
 	_refresh_cities()
-	var loc := SettingsStore.load_localization()
-	loc_data = loc.data
-	for e in loc.errors:
+	var zh := SettingsStore.load_localization()
+	_zh_data = zh.data
+	for e in zh.errors:
 		_set_status("本地化文件警告：%s" % e)
+	_snapshot("loc:zh", _zh_data)
 	_select_world(world_ids[0] if not world_ids.is_empty() else "")
 	_select_city(city_ids[0] if not city_ids.is_empty() else "")
-	_rebuild_loc_rows()
+	_refresh_loc_languages()
+	_select_loc_lang("zh" if SettingsStore.list_languages().has("zh") else SettingsStore.list_languages()[0])
 
 	world_pick.item_selected.connect(_on_world_picked)
 	new_btn.pressed.connect(_on_world_created)
@@ -125,7 +136,30 @@ func _ready() -> void:
 	wall_add_btn.pressed.connect(_on_add_wallpaper)
 	effect_add_btn.pressed.connect(_on_add_effect)
 	loc_add_btn.pressed.connect(_on_loc_add)
+	loc_lang_pick.item_selected.connect(_on_loc_lang_picked)
+	loc_new_lang_btn.pressed.connect(_on_lang_created)
 	save_btn.pressed.connect(_on_save)
+
+	# 脏状态指示（草稿快照机制，m3 批复小修）
+	_dirty_timer = Timer.new()
+	_dirty_timer.wait_time = 0.5
+	_dirty_timer.autostart = true
+	_dirty_timer.timeout.connect(_apply_status)
+	add_child(_dirty_timer)
+
+	# 退出时脏检测：未保存改动 → 保存全部 / 放弃 / 取消（草稿快照可回退）
+	get_window().close_requested.connect(_on_close_request)
+	_close_dialog = ConfirmationDialog.new()
+	_close_dialog.title = "未保存的改动"
+	_close_dialog.dialog_text = "有未保存的改动。"
+	_close_dialog.ok_button_text = "保存全部并退出"
+	_close_dialog.add_button("不保存退出", false, "discard")
+	_close_dialog.confirmed.connect(_save_all_then_quit)
+	_close_dialog.custom_action.connect(func(action: String) -> void:
+		if action == "discard":
+			get_tree().quit())
+	add_child(_close_dialog)
+	_set_status("改动先存内存草稿（关闭时会询问处理）；「保存当前页」立即落盘")
 
 	# 世界参数 SpinBox → current_world 字段实时写入（保存时随世界 JSON 落盘）
 	for pair in [
@@ -218,6 +252,8 @@ func _select_world(id: String) -> void:
 	w_comp_spin.value = float(current_world.get("annual_compensation", 0.0))
 	_rebuild_time_rows()
 	_rebuild_date_rows()
+	if current_world_id != "":
+		_snapshot("world:" + current_world_id, current_world)
 
 
 func _on_world_picked(index: int) -> void:
@@ -343,6 +379,8 @@ func _select_city(id: String) -> void:
 	_rebuild_system_picks()
 	_rebuild_dict_rows(wall_rows, "wallpaper", "壁纸路径，逗号分隔")
 	_rebuild_dict_rows(effect_rows, "effects", "效果标识，逗号分隔")
+	if current_city_id != "":
+		_snapshot("city:" + current_city_id, current_city)
 
 
 func _form_controls() -> Array:
@@ -501,12 +539,55 @@ func _ensure_city_dict(field: String) -> Dictionary:
 	return current_city[field]
 
 
-# ———————— 本地化页 ————————
+# ———————— 本地化页（每语言一个子页签的数据：Localization/<语言>.yaml）———————
+
+func _refresh_loc_languages() -> void:
+	loc_lang_pick.clear()
+	for lang in SettingsStore.list_languages():
+		loc_lang_pick.add_item(lang, 0)
+		loc_lang_pick.set_item_metadata(loc_lang_pick.item_count - 1, lang)
+
+
+func _select_loc_lang(lang: String) -> void:
+	_loc_lang = lang
+	var res := SettingsStore.load_localization_file(SettingsStore.loc_path(lang))
+	_loc_lang_data = res.data
+	for e in res.errors:
+		_set_status("本地化文件 %s 警告：%s" % [lang, e])
+	for i in loc_lang_pick.item_count:
+		if str(loc_lang_pick.get_item_metadata(i)) == lang:
+			loc_lang_pick.select(i)
+			break
+	_snapshot("loc:" + lang, _loc_lang_data)
+	_rebuild_loc_rows()
+
+
+func _on_loc_lang_picked(index: int) -> void:
+	_select_loc_lang(str(loc_lang_pick.get_item_metadata(index)))
+
+
+func _on_lang_created() -> void:
+	var lang := loc_new_lang_edit.text.strip_edges()
+	if lang.is_empty():
+		_set_status("请先输入新语言代码（如 en / ja）")
+		return
+	if lang.contains("/") or lang.contains("\\") or lang.contains(".") or lang.contains(":"):
+		_set_status("语言代码不能包含 / \\ : .")
+		return
+	if SettingsStore.list_languages().has(lang):
+		_set_status("语言 %s 已存在" % lang)
+		return
+	SettingsStore.save_localization_file(SettingsStore.loc_path(lang), {"cities": {}, "worlds": {}})
+	_refresh_loc_languages()
+	_select_loc_lang(lang)
+	loc_new_lang_edit.text = ""
+	_set_status("已创建语言 %s（记得保存）" % lang)
+
 
 func _rebuild_loc_rows() -> void:
 	_clear_children(loc_rows)
-	for group in loc_data:
-		var entries: Dictionary = loc_data[group]
+	for group in _loc_lang_data:
+		var entries: Dictionary = _loc_lang_data[group]
 		var section := VBoxContainer.new()
 		section.add_theme_constant_override("separation", 4)
 		var title := Label.new()
@@ -525,14 +606,14 @@ func _make_loc_row(group: String, key: String) -> HBoxContainer:
 	key_label.custom_minimum_size = Vector2(200, 0)
 	key_label.text_overrun_behavior = TextServer.OVERRUN_TRIM_ELLIPSIS
 	var value_edit := LineEdit.new()
-	value_edit.text = str(loc_data[group].get(key, ""))
+	value_edit.text = str(_loc_lang_data[group].get(key, ""))
 	value_edit.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	value_edit.text_changed.connect(func(t: String) -> void:
-		loc_data[group][key] = t)
+		_loc_lang_data[group][key] = t)
 	var del := Button.new()
 	del.text = "✕"
 	del.pressed.connect(func() -> void:
-		loc_data[group].erase(key)
+		_loc_lang_data[group].erase(key)
 		_rebuild_loc_rows())
 	box.add_child(key_label)
 	box.add_child(value_edit)
@@ -546,7 +627,7 @@ func _on_loc_add() -> void:
 	if group.is_empty() or key.is_empty():
 		_set_status("添加本地化条目需要组名与键名")
 		return
-	_ensure_loc_group(group)[key] = loc_value_edit.text
+	_ensure_lang_group(group)[key] = loc_value_edit.text
 	loc_key_edit.text = ""
 	loc_value_edit.text = ""
 	_rebuild_loc_rows()
@@ -572,7 +653,8 @@ func _save_phen_tab() -> void:
 		return
 	var err := SettingsStore.save_phenomena(phen_world_id, phen_data)
 	if err == OK:
-		SettingsStore.save_localization(loc_data)
+		SettingsStore.save_localization(_zh_data)
+		_snapshot("loc:zh", _zh_data)
 		_refresh_phen_worlds()
 		_set_status("已保存 Worlds/%s.phenomena.json 与本地化" % phen_world_id)
 	else:
@@ -586,7 +668,8 @@ func _save_world_tab() -> void:
 	current_world["seed"] = seed_edit.text.strip_edges()
 	var err := SettingsStore.save_world(current_world_id, current_world)
 	if err == OK:
-		SettingsStore.save_localization(loc_data)
+		SettingsStore.save_localization(_zh_data)
+		_snapshot("loc:zh", _zh_data)
 		_refresh_worlds()
 		_select_world(current_world_id)
 		_set_status("已保存 Worlds/%s.json 与本地化" % current_world_id)
@@ -605,7 +688,8 @@ func _save_city_tab() -> void:
 	_ensure_loc_group("cities")[current_city_id] = name_edit.text
 	var err := SettingsStore.save_city(current_city_id, current_city)
 	if err == OK:
-		SettingsStore.save_localization(loc_data)
+		SettingsStore.save_localization(_zh_data)
+		_snapshot("loc:zh", _zh_data)
 		_refresh_cities()
 		_select_city(current_city_id)
 		_set_status("已保存 Cities/%s.json 与本地化" % current_city_id)
@@ -614,18 +698,76 @@ func _save_city_tab() -> void:
 
 
 func _save_loc_tab() -> void:
-	var err := SettingsStore.save_localization(loc_data)
+	var err := SettingsStore.save_localization_file(SettingsStore.loc_path(_loc_lang), _loc_lang_data)
 	if err == OK:
+		_snapshot("loc:" + _loc_lang, _loc_lang_data)
+		_set_status("已保存 res://Localization/%s.yaml" % _loc_lang)
+	else:
+		_set_status("保存失败（%d）" % err)
+
+
+# ———————— 草稿快照与退出脏检测（m3 批复小修）——————
+
+func _snapshot(key: String, data: Dictionary) -> void:
+	_snapshots[key] = data.duplicate(true)
+
+
+## 当前打开的全部文档：key / 数据引用 / 保存函数。
+func _doc_specs() -> Array:
+	return [
+		{"key": "world:" + current_world_id, "empty": current_world.is_empty(),
+				"data": current_world, "save": _save_world_tab},
+		{"key": "city:" + current_city_id, "empty": current_city.is_empty(),
+				"data": current_city, "save": _save_city_tab},
+		{"key": "phen:" + phen_world_id, "empty": phen_data.is_empty(),
+				"data": phen_data, "save": _save_phen_tab},
+		{"key": "loc:" + _loc_lang, "empty": _loc_lang_data.is_empty(),
+				"data": _loc_lang_data, "save": _save_loc_tab},
+		{"key": "loc:zh", "empty": _zh_data.is_empty(),
+				"data": _zh_data, "save": _save_zh_names},
+	]
+
+
+## 与打开时快照相比有改动的文档列表。
+func _dirty_docs() -> Array:
+	var out := []
+	for spec in _doc_specs():
+		if bool(spec.empty) or not _snapshots.has(spec.key):
+			continue
+		if hash(JSON.stringify(spec.data)) != hash(JSON.stringify(_snapshots[spec.key])):
+			out.append(spec)
+	return out
+
+
+## 保存 zh 名字（城市/世界/现象名的改动都在这张表）。
+func _save_zh_names() -> void:
+	var err := SettingsStore.save_localization(_zh_data)
+	if err == OK:
+		_snapshot("loc:zh", _zh_data)
 		_set_status("已保存 res://Localization/zh.yaml")
 	else:
 		_set_status("保存失败（%d）" % err)
 
 
+func _on_close_request() -> void:
+	if _dirty_docs().is_empty():
+		get_tree().quit()
+	else:
+		_close_dialog.dialog_text = "有 %d 处未保存改动。退出前如何处理？（未保存前可随时“恢复打开时状态”）" % _dirty_docs().size()
+		_close_dialog.popup_centered()
+
+
+func _save_all_then_quit() -> void:
+	for spec in _dirty_docs():
+		spec.save.call()
+	get_tree().quit()
+
+
 # ———————— 现象页 ————————
 
 func _loc_value(group: String, key: String) -> String:
-	if loc_data.has(group) and typeof(loc_data[group]) == TYPE_DICTIONARY:
-		return str(loc_data[group].get(key, ""))
+	if _zh_data.has(group) and typeof(_zh_data[group]) == TYPE_DICTIONARY:
+		return str(_zh_data[group].get(key, ""))
 	return ""
 
 
@@ -742,6 +884,8 @@ func _select_phen_entry() -> void:
 	phen_p_spin.value = float(origin.get("p_per_day", 0.05))
 	_rebuild_rel_rows()
 	_rebuild_kf_rows()
+	if phen_world_id != "":
+		_snapshot("phen:" + phen_world_id, phen_data)
 
 
 func _phen_set(key: String, v) -> void:
@@ -978,10 +1122,18 @@ func _on_kf_add() -> void:
 
 # ———————— 工具 ————————
 
+## zh 名字字典（城市/世界/现象名）——主界面显示名来源。
 func _ensure_loc_group(group: String) -> Dictionary:
-	if not loc_data.has(group) or typeof(loc_data[group]) != TYPE_DICTIONARY:
-		loc_data[group] = {}
-	return loc_data[group]
+	if not _zh_data.has(group) or typeof(_zh_data[group]) != TYPE_DICTIONARY:
+		_zh_data[group] = {}
+	return _zh_data[group]
+
+
+## 本地化页当前语言字典。
+func _ensure_lang_group(group: String) -> Dictionary:
+	if not _loc_lang_data.has(group) or typeof(_loc_lang_data[group]) != TYPE_DICTIONARY:
+		_loc_lang_data[group] = {}
+	return _loc_lang_data[group]
 
 
 func _clear_children(node: Node) -> void:
@@ -1009,4 +1161,11 @@ func _join_list(value: Variant) -> String:
 
 
 func _set_status(text: String) -> void:
-	status_label.text = text
+	_status_text = text
+	_apply_status()
+
+
+## 状态栏 = 最近一条状态 + 脏标记（草稿快照机制）。
+func _apply_status() -> void:
+	var n := _dirty_docs().size()
+	status_label.text = _status_text + ("　●　有 %d 处未保存改动（关闭时会询问处理）" % n if n > 0 else "")

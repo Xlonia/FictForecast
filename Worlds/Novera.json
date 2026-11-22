@@ -1,0 +1,22 @@
+{
+	"annual_compensation": 0.0,
+	"axial_tilt_deg": 23.44,
+	"base_dates": [
+		{
+			"id": "xnidnisia",
+			"offset_days": 3000277
+		}
+	],
+	"base_times": [
+		{
+			"id": "hmt",
+			"offset_minutes": -420
+		}
+	],
+	"day_hours": 24.0,
+	"month_smoothing": 0.5,
+	"month_temp_sigma": 2.2,
+	"monthly_total_strength": 0.0,
+	"phenomena_spread_days": 7.0,
+	"seed": ""
+}

@@ -2,3 +2,10 @@
 *.tmp
 Climate/*.translation
 export/
+
+# —— 人机共建内部文档（批复/审计/报告/设计稿等 markdown）——
+# 默认不同步到 GitHub：避免误导引用、构建、分叉本仓库的他人 AI；作者自行筛选后再发布
+*.md
+!README.md
+aiTests/
+workbench/

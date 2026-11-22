@@ -1,16 +1,30 @@
 class_name WeatherEngine
 extends RefCounted
-## v1 天气引擎：月份数据插值 + 日期种子确定性随机。
+## v0.0.1-m3 天气引擎：**月度确定性生成** + 日查询。
 ##
-## —— 当前机制（刻意保持简单）——
-## · 随机种子来自日期（设计文档：全年 365/366 个种子），同一天任何时候
-##   生成都会得到同一份天气；未来的“随机评分筛选”尚未实装。
-## · 天气型只有 晴/阴/雨 三种，权重只由「平均日照时长」折算。
-## · 气温在月均值（跨月加权）上叠加确定性扰动，并被当月气象记录钳制。
+## —— 生成顺序（批复：所在月份的每天先预生成，评分筛选以此为前置结构）——
+## month_report() 一次生成整月：
+##   1. 雨日布局：rain_days（raint）锁定雨日数量——发生口径“降水量>0 即雨日”
+##   2. 降水量分配：日独立量 与 rmean 总量对账 按 monthly_total_strength 插值
+##   3. 温度距平：日种子原始噪声 与 低频平滑项 按 month_smoothing 插值；
+##      距平按 monthly_total_strength 做零和收敛——“凑齐月积温”
+##   4. 雪：冷期雨日按 snow_days/raint 比例转雪
+##   5. 露点中介（已采纳）：月尺度 T+RH→露点；日尺度 RH=f(当日温标, 露点)
+## day_report() 从缓存读取当日条目。
 ##
-## —— 为评分筛选预留的结构 ——
-## day_report() 已经把“一天”封装成一个自包含的候选结果 Dictionary；
-## 未来只需把这里的“单次抽样”重复 N 次生成候选，再用评分函数择优即可。
+## —— 种子（WorldRng，三层）——
+## 年度种子：年温度距平 ±1℃、年降水比 1±0.15（“每个年份同期会有波动”）
+## 月度种子：月温度距平 ±1℃ + 雨日布局（现象分配待现象期接入）
+## 日期种子：日噪声原始项、天空分类、雪判定
+##
+## —— 世界参数消费 ——
+## month_temp_sigma / month_smoothing / monthly_total_strength
+## （axial_tilt_deg、day_hours、phenomena_spread_days、annual_compensation 暂未消费）
+##
+## —— 城市噪点（批复：相近经纬度获得相近的气候偏差）——
+## city_noise × NOISE_TEMP_SCALE 作为城市站常驻温度偏置；海拔差异待接入。
+##
+## —— 随机评分筛选（硬否决前置→方案一择优）尚未实装，月度预生成即其前置结构。
 
 enum SkyKind { SUNNY, CLOUDY, RAINY }
 
@@ -18,90 +32,218 @@ enum SkyKind { SUNNY, CLOUDY, RAINY }
 ## 距月初/月末不足半窗时与相邻月份加权平均，月中央保持本月纯值。
 const BLEND_DAYS := 15.0
 
-# —— 日照 → 天气权重标定（v1 唯一输入：平均日照时长，单位：小时/日）——
-const RAIN_BASE := 0.55   # p(雨) = RAIN_BASE - 日日照 * RAIN_SLOPE
-const RAIN_SLOPE := 0.055
-const RAIN_MIN := 0.05
-const RAIN_MAX := 0.60
-const SUNNY_BASE := 2.0   # p(晴) = (日日照 - SUNNY_BASE) / SUNNY_DIV
+# —— 日照 → 晴/阴标定（雨天由 raint 布局锁定，不在此列）——
+const SUNNY_BASE := 2.0   # p(晴) = (日日照 - SUNNY_BASE) / SUNNY_DIV，仅对非雨日
 const SUNNY_DIV := 9.0
 const SUNNY_MIN := 0.10
 const SUNNY_MAX := 0.75
 
-const ANOMALY_SIGMA := 2.2   # 当日整体冷暖距平 σ（℃）
-const SPREAD_SIGMA := 0.8    # 高低温独立噪声 σ（℃）
+# —— 年度/月度差异幅度（批复：每年每月相比同期有波动）——
+const YEAR_TEMP_SIGMA := 1.0      # 年温度距平 σ（℃）
+const YEAR_PRECIP_SIGMA := 0.15   # 年降水比 σ（±15%，钳制 0.6..1.5）
+const MONTH_TEMP_SIGMA := 1.0     # 月温度距平 σ（℃）
+const NOISE_TEMP_SCALE := 1.5     # 城市噪点 → 站点温度偏置（℃）
+const SNOW_TEMP_MAX := 1.0        # 日低温低于此值时雨才可能成雪（℃）
 
 var climate: ClimateData
+var world_id := ""
+var world := {}   # Worlds/<id>.json（缺省字段走骨架默认）
+var city := {}    # Cities/<id>.json（lati/long 用于城市噪点）
+var _month_cache := {}  # "y-m" -> month_report
 
 
-func _init(climate_data: ClimateData = null) -> void:
+func _init(climate_data: ClimateData = null, world_id := "", world := {}, city := {}) -> void:
 	climate = climate_data
+	self.world_id = world_id
+	self.world = world
+	self.city = city
 
 
-## 生成某一天的完整预报（同一天多次调用结果一致）。
+## 生成某一天的完整预报（同一天多次调用结果一致；整月共享一次月度生成）。
 func day_report(year: int, month: int, day: int) -> Dictionary:
 	if climate == null:
 		return {
-			"sky": SkyKind.SUNNY, "high": NAN, "low": NAN,
-			"rain_prob": NAN, "sun_daily": NAN, "humidity": NAN,
+			"sky": SkyKind.SUNNY, "snow": false, "high": NAN, "low": NAN,
+			"rain_prob": NAN, "precip_mm": 0.0, "sun_daily": NAN, "humidity": NAN,
 			"seed_key": "%04d-%02d-%02d" % [year, month, day],
 		}
-
-	var rng := RandomNumberGenerator.new()
-	rng.seed = hash("%04d-%02d-%02d" % [year, month, day])
-
-	var days := _days_in_month(year, month)
-	var sun_daily := _blend("sunshine", month, day, year) / days
-
-	var p_rain := clampf(RAIN_BASE - sun_daily * RAIN_SLOPE, RAIN_MIN, RAIN_MAX)
-	var p_sunny := clampf((sun_daily - SUNNY_BASE) / SUNNY_DIV, SUNNY_MIN, SUNNY_MAX)
-	var p_cloudy := maxf(1.0 - p_rain - p_sunny, 0.0)
-
-	var roll := rng.randf()
-	var sky := SkyKind.SUNNY
-	if roll >= p_sunny + p_cloudy:
-		sky = SkyKind.RAINY
-	elif roll >= p_sunny:
-		sky = SkyKind.CLOUDY
-
-	var high := _blend("high_temp", month, day, year)
-	var low := _blend("low_temp", month, day, year)
-	var anomaly := rng.randfn(0.0, ANOMALY_SIGMA)
-	var spread := rng.randfn(0.0, SPREAD_SIGMA)
-
-	# 天气型对日较差的修正：雨天压制最高温、托高最低温；晴天反之
-	match sky:
-		SkyKind.RAINY:
-			high -= 1.8 + rng.randf() * 1.6
-			low += 0.6 + rng.randf() * 0.6
-		SkyKind.CLOUDY:
-			high -= 0.8 + rng.randf() * 0.8
-			low += 0.3
-		SkyKind.SUNNY:
-			high += 0.6
-			low -= 0.3
-
-	high += anomaly + spread
-	low += anomaly - spread
-
-	# 气象记录硬钳制（缺数据时跳过）
-	var rec_high := _blend("record_high", month, day, year)
-	var rec_low := _blend("record_low", month, day, year)
-	if not is_nan(rec_high):
-		high = minf(high, rec_high)
-	if not is_nan(rec_low):
-		low = maxf(low, rec_low)
-	low = minf(low, high - 1.0)
-
+	var mr := month_report(year, month)
+	var idx := clampi(day, 1, mr["days"]) - 1
+	var e: Dictionary = mr["day_entries"][idx]
 	return {
-		"sky": sky,
-		"high": high,
-		"low": low,
-		"rain_prob": p_rain,
-		"sun_daily": sun_daily,
-		"humidity": _blend("humidity", month, day, year),
+		"sky": e["sky"],
+		"snow": e["snow"],
+		"high": e["high"],
+		"low": e["low"],
+		"rain_prob": mr["rain_prob"],       # 当月雨日占比（0..1）——确定性世界的“降雨可能”口径
+		"precip_mm": e["precip_mm"],
+		"sun_daily": _blend("sunshine", month, day, year) / float(mr["days"]),
+		"humidity": e["rh"],
 		"seed_key": "%04d-%02d-%02d" % [year, month, day],
 	}
+
+
+## 整月确定性生成（带缓存）。结构上即未来评分筛选的“月度预生成”层。
+func month_report(year: int, month: int) -> Dictionary:
+	var key := "%04d-%02d" % [year, month]
+	if _month_cache.has(key):
+		return _month_cache[key]
+	var rep := _generate_month(year, month)
+	_month_cache[key] = rep
+	return rep
+
+
+func _generate_month(year: int, month: int) -> Dictionary:
+	var days := _days_in_month(year, month)
+	var seeds := WorldRng.world_seeds(world_id, year, month, 1)
+	var rng_year := WorldRng.rng_from_seed(seeds.year_seed)
+	var rng_month := WorldRng.rng_from_seed(seeds.month_seed)
+
+	# —— 年度 / 月度差异（批复：每年每月同期波动）——
+	var year_temp_a := rng_year.randfn(0.0, YEAR_TEMP_SIGMA)
+	var year_precip := clampf(1.0 + rng_year.randfn(0.0, YEAR_PRECIP_SIGMA), 0.6, 1.5)
+	var month_temp_a := rng_month.randfn(0.0, MONTH_TEMP_SIGMA)
+	var city_offset := _city_temp_offset()
+
+	# —— 世界参数 ——
+	var sigma := clampf(_worldf("month_temp_sigma", 2.2), 0.2, 20.0)
+	var smoothing := clampf(_worldf("month_smoothing", 0.5), 0.0, 1.0)
+	var reconcile := clampf(_worldf("monthly_total_strength", 0.0), 0.0, 1.0)
+
+	# —— 1. 雨日布局（raint 锁定；月度种子洗牌）——
+	var rain_target := clampi(roundi(_month_value_or("rain_days", month, 0.0)), 0, days)
+	var order := range(days)
+	for i in range(days - 1, 0, -1):
+		var j := rng_month.randi_range(0, i)
+		var tmp: int = order[i]
+		order[i] = order[j]
+		order[j] = tmp
+	var rain_set := {}
+	for i in rain_target:
+		rain_set[order[i] + 1] = true
+
+	# —— 月尺度气候目标 ——
+	var rmean_total := maxf(_month_value_or("precip", month, 0.0) * year_precip, 0.0)
+	var snow_ratio := clampf(
+		_month_value_or("snow_days", month, 0.0) / maxf(_month_value_or("rain_days", month, 1.0), 1.0),
+		0.0, 1.0)
+	var td_month := _dewpoint_from(
+		_month_value_or("mean_temp", month,
+				(_month_value_or("high_temp", month, 15.0) + _month_value_or("low_temp", month, 5.0)) * 0.5),
+		_month_value_or("humidity", month, 70.0))
+	var base_offset := year_temp_a + month_temp_a + city_offset
+
+	# —— 2/3. 逐日原始项（第一遍：只掷种子，不组装）——
+	var raw_mm := {}
+	var raw_a := {}
+	var sky_roll := {}
+	var snow_roll := {}
+	var mod_roll := {}
+	for d in range(1, days + 1):
+		var rng_d := WorldRng.rng_from_seed(WorldRng.world_seeds(world_id, year, month, d).day_seed)
+		raw_mm[d] = rng_d.randf_range(0.2, 8.0) if rain_set.has(d) else 0.0
+		raw_a[d] = rng_d.randfn(0.0, sigma)
+		sky_roll[d] = rng_d.randf()
+		snow_roll[d] = rng_d.randf()
+		mod_roll[d] = [rng_d.randf(), rng_d.randf()]
+
+	# —— 平滑 + 零和收敛（凑齐月积温）：先平滑，再对最终距平做零和——
+	# 月均值由 base_offset（年度+月度+城市偏置）承担，strength=1 时恰好凑齐
+	var final_a := {}
+	var mean_a := 0.0
+	for d in range(1, days + 1):
+		var dn := WorldRng.stable_day_number(year, month, d)
+		var a: float = lerpf(raw_a[d], WorldRng.smooth_day_noise(world_id, dn) * sigma * 1.2, smoothing)
+		final_a[d] = a
+		mean_a += a
+	mean_a /= days
+	var anomaly_shift := -mean_a * reconcile
+	for d in range(1, days + 1):
+		final_a[d] += anomaly_shift
+
+	# —— 降水量对账：独立量 → rmean 总量分配，按 reconcile 插值 ——
+	if rain_target > 0 and reconcile > 0.0:
+		var wsum := 0.0
+		var weights := {}
+		for d in rain_set:
+			var w: float = raw_mm[d] + 0.4
+			weights[d] = w
+			wsum += w
+		for d in rain_set:
+			var reconciled: float = weights[d] / wsum * rmean_total
+			raw_mm[d] = lerpf(raw_mm[d], reconciled, reconcile)
+
+	# —— 4/5. 逐日组装 ——
+	var day_entries := []
+	for d in range(1, days + 1):
+		var anomaly: float = final_a[d]
+		var high := _blend("high_temp", month, d, year) + base_offset + anomaly
+		var low := _blend("low_temp", month, d, year) + base_offset + anomaly
+		var is_rain: bool = rain_set.has(d)
+		var sky := SkyKind.RAINY
+		var snow := false
+		var precip: float = raw_mm[d]
+		if not is_rain:
+			var p_sunny := clampf((_blend("sunshine", month, d, year) / float(days)
+					- SUNNY_BASE) / SUNNY_DIV, SUNNY_MIN, SUNNY_MAX)
+			sky = SkyKind.SUNNY if sky_roll[d] < p_sunny else SkyKind.CLOUDY
+		else:
+			# 冷期雨日按 snow_days/raint 比例转雪
+			if low < SNOW_TEMP_MAX and snow_roll[d] < snow_ratio:
+				snow = true
+		match sky:
+			SkyKind.RAINY:
+				high -= 1.8 + mod_roll[d][0] * 1.6
+				low += 0.6 + mod_roll[d][1] * 0.6
+			SkyKind.CLOUDY:
+				high -= 0.8 + mod_roll[d][0] * 0.8
+				low += 0.3
+			SkyKind.SUNNY:
+				high += 0.6
+				low -= 0.3
+		# 气象记录硬钳制（硬否决层，缺数据跳过）
+		var rec_high := _blend("record_high", month, d, year)
+		var rec_low := _blend("record_low", month, d, year)
+		if not is_nan(rec_high):
+			high = minf(high, rec_high)
+		if not is_nan(rec_low):
+			low = maxf(low, rec_low)
+		low = minf(low, high - 1.0)
+		# 露点中介：月露点 + 当日温标 → 日湿度
+		var rh := _rh_from((high + low) * 0.5, td_month)
+		if is_rain:
+			rh = maxf(rh, 92.0)
+		day_entries.append({
+			"day": d, "sky": sky, "snow": snow, "precip_mm": precip,
+			"high": high, "low": low, "rh": rh, "anomaly": anomaly,
+		})
+
+	return {
+		"days": days,
+		"rain_target": rain_target,
+		"rain_prob": float(rain_target) / float(days) if days > 0 else 0.0,
+		"precip_total": rmean_total,
+		"year_temp_a": year_temp_a,
+		"month_temp_a": month_temp_a,
+		"city_offset": city_offset,
+		"day_entries": day_entries,
+	}
+
+
+# —— 露点中介（Magnus 公式，a=17.62 b=243.12）——
+
+## 温度（℃）+ 相对湿度（%）→ 露点（℃）
+static func _dewpoint_from(t_c: float, rh_pct: float) -> float:
+	var rh := clampf(rh_pct, 1.0, 100.0)
+	var g := log(rh / 100.0) + 17.62 * t_c / (243.12 + t_c)
+	return 243.12 * g / (17.62 - g)
+
+
+## 温度（℃）+ 露点（℃）→ 相对湿度（%）
+static func _rh_from(t_c: float, td_c: float) -> float:
+	var g_t := 17.62 * t_c / (243.12 + t_c)
+	var g_td := 17.62 * td_c / (243.12 + td_c)
+	return clampf(100.0 * exp(g_td - g_t), 1.0, 100.0)
 
 
 ## 按公历推进一天，返回 {"year","month","day"}。
@@ -154,3 +296,19 @@ func _blend(key: String, month: int, day: int, year: int) -> float:
 	if is_nan(neighbor):
 		return own
 	return lerpf(neighbor, own, w_own)
+
+
+func _city_temp_offset() -> float:
+	if world_id.is_empty() or city.is_empty():
+		return 0.0
+	return WorldRng.city_noise(world_id, float(city.get("lati", 0.0)), float(city.get("long", 0.0))) * NOISE_TEMP_SCALE
+
+
+func _worldf(key: String, fallback: float) -> float:
+	var v = world.get(key, fallback)
+	return fallback if typeof(v) != TYPE_FLOAT and typeof(v) != TYPE_INT else float(v)
+
+
+func _month_value_or(key: String, month: int, fallback: float) -> float:
+	var v := climate.month_value(key, month) if climate != null else NAN
+	return fallback if is_nan(v) else v

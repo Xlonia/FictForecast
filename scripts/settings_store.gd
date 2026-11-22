@@ -14,6 +14,7 @@ extends RefCounted
 
 const WORLDS_DIR := "res://Worlds"
 const CITIES_DIR := "res://Cities"
+const LOC_DIR := "res://Localization"
 const LOC_FILE := "res://Localization/zh.yaml"
 
 const WORLD_DEFAULTS := {
@@ -116,28 +117,60 @@ static func load_phenomena(world_id: String) -> Dictionary:
 
 
 static func save_phenomena(world_id: String, data: Dictionary) -> Error:
+	# 形状防御：现象文件必须含 phenomena 数组；世界骨架（base_times 等）误入时拒绝写盘
+	# （m3 曾发生世界数据被写进现象文件的事故，此防御保证两类文件互不污染）
+	if not data.has("phenomena") or typeof(data["phenomena"]) != TYPE_ARRAY:
+		push_error("save_phenomena 拒绝写入：数据缺少 phenomena 数组（%s）" % phenomena_path(world_id))
+		return ERR_INVALID_DATA
 	return _save_json(phenomena_path(world_id), data)
 
 
 static func load_localization() -> Dictionary:
-	if _loc_cache.has(LOC_FILE):
-		return {"data": _loc_cache[LOC_FILE], "errors": []}
-	var text := ""
-	if FileAccess.file_exists(LOC_FILE):
-		var f := FileAccess.open(LOC_FILE, FileAccess.READ)
-		if f != null:
-			text = f.get_as_text()
-	var res := MiniYaml.parse(text)
-	_loc_cache[LOC_FILE] = res.data
-	return res
+	return load_localization_file(LOC_FILE)
 
 
 static func save_localization(data: Dictionary) -> Error:
-	var f := FileAccess.open(LOC_FILE, FileAccess.WRITE)
+	return save_localization_file(LOC_FILE, data)
+
+
+## 多语言支持（m3 批复：本地化界面每语言一个子页签）——
+## Localization/<语言代码>.yaml，一个文件一种语言。
+static func list_languages() -> Array[String]:
+	var langs: Array[String] = []
+	var dir := DirAccess.open(LOC_DIR)
+	if dir != null:
+		for f in dir.get_files():
+			if f.get_extension().to_lower() == "yaml":
+				langs.append(f.get_basename())
+	langs.sort()
+	if langs.is_empty():
+		langs.append("zh")
+	return langs
+
+
+static func loc_path(lang: String) -> String:
+	return LOC_DIR.path_join(lang + ".yaml")
+
+
+static func load_localization_file(path: String) -> Dictionary:
+	if _loc_cache.has(path):
+		return {"data": _loc_cache[path], "errors": []}
+	var text := ""
+	if FileAccess.file_exists(path):
+		var f := FileAccess.open(path, FileAccess.READ)
+		if f != null:
+			text = f.get_as_text()
+	var res := MiniYaml.parse(text)
+	_loc_cache[path] = res.data
+	return res
+
+
+static func save_localization_file(path: String, data: Dictionary) -> Error:
+	var f := FileAccess.open(path, FileAccess.WRITE)
 	if f == null:
 		return FileAccess.get_open_error()
 	f.store_string(MiniYaml.dumps(data))
-	_loc_cache[LOC_FILE] = data.duplicate(true)
+	_loc_cache[path] = data.duplicate(true)
 	return OK
 
 
