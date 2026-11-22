@@ -1,6 +1,11 @@
-extends Window
+extends Control
 ## 设置编辑器（骨架版）：按《幻想气象局.md》的「世界设置 / 城市设置」骨架，
 ## 以表单方式修改 JSON（世界/城市）与 YAML（本地化）。
+##
+## 运行形态与 THX 系列一致：本场景根节点是普通 Control，由批处理/主程序以
+## **独立进程**启动（godot --path <工程> res://scenes/editor.tscn），
+## 整窗即编辑器，可拖动/缩放/关闭，与游戏主程序互不影响；
+## 主程序退出时会主动击杀自己拉起的编辑器进程。
 ##
 ## 字段与文件布局已按文档定死；等确切设定给出后，再在此基础上接入引擎
 ## （时区/历法实际生效、壁纸与气象效果的播放、世界种子进入随机流等）。
@@ -50,9 +55,10 @@ var loc_data := {}
 @onready var loc_value_edit: LineEdit = $Root/Column/Tabs/LocTab/LocAdd/LocValueEdit
 @onready var loc_add_btn: Button = $Root/Column/Tabs/LocTab/LocAdd/LocAddBtn
 
-# —— 世界页参数（m2：波动/日照/现象分布）——
-@onready var w_axial_spin: SpinBox = $Root/Column/Tabs/WorldTab/Form/ParamSection/Grid/WAxialSpin
-@onready var w_day_hours_spin: SpinBox = $Root/Column/Tabs/WorldTab/Form/ParamSection/Grid/WDayHoursSpin
+# —— 世界页参数（m2：波动/现象分布；m2.1 批复隐藏两项超前参数，见下方注释）——
+# [m2.1 隐藏·下版本可能启用] 日照/昼夜模型实装时恢复这两个控件（tscn 中也已注释）
+# @onready var w_axial_spin: SpinBox = $Root/Column/Tabs/WorldTab/Form/ParamSection/Grid/WAxialSpin
+# @onready var w_day_hours_spin: SpinBox = $Root/Column/Tabs/WorldTab/Form/ParamSection/Grid/WDayHoursSpin
 @onready var w_temp_sigma_spin: SpinBox = $Root/Column/Tabs/WorldTab/Form/ParamSection/Grid/WTempSigmaSpin
 @onready var w_smooth_spin: SpinBox = $Root/Column/Tabs/WorldTab/Form/ParamSection/Grid/WSmoothSpin
 @onready var w_total_spin: SpinBox = $Root/Column/Tabs/WorldTab/Form/ParamSection/Grid/WTotalSpin
@@ -94,6 +100,8 @@ var phen_index := -1
 
 
 func _ready() -> void:
+	# 独立进程运行：整窗即编辑器（THX 惯例），把宿主窗口标题改成本编辑器的
+	get_window().title = "设置编辑器 · 幻想气象局"
 	SettingsStore.ensure_defaults()
 	_refresh_worlds()
 	_refresh_cities()
@@ -120,7 +128,8 @@ func _ready() -> void:
 	save_btn.pressed.connect(_on_save)
 
 	# 世界参数 SpinBox → current_world 字段实时写入（保存时随世界 JSON 落盘）
-	for pair in [[w_axial_spin, "axial_tilt_deg"], [w_day_hours_spin, "day_hours"],
+	for pair in [
+			# [m2.1 隐藏·下版本可能启用] [w_axial_spin, "axial_tilt_deg"], [w_day_hours_spin, "day_hours"],
 			[w_temp_sigma_spin, "month_temp_sigma"], [w_smooth_spin, "month_smoothing"],
 			[w_total_spin, "monthly_total_strength"], [w_spread_spin, "phenomena_spread_days"],
 			[w_comp_spin, "annual_compensation"]]:
@@ -164,9 +173,6 @@ func _ready() -> void:
 	rel_add_btn.pressed.connect(_on_rel_add)
 	kf_add_btn.pressed.connect(_on_kf_add)
 
-	# 可关闭的系统窗口：从主程序打开 → 真关闭并释放；独立打开（批处理）→ 退出
-	close_requested.connect(_on_close_requested)
-
 	# 页签中文标题（TabContainer 默认用节点名）
 	tabs.set_tab_title(0, "世界")
 	tabs.set_tab_title(1, "城市")
@@ -201,11 +207,10 @@ func _select_world(id: String) -> void:
 			break
 	seed_edit.text = str(current_world.get("seed", ""))
 	seed_edit.editable = id != ""
-	for sp in [w_axial_spin, w_day_hours_spin, w_temp_sigma_spin, w_smooth_spin,
+	for sp in [w_temp_sigma_spin, w_smooth_spin,
 			w_total_spin, w_spread_spin, w_comp_spin]:
 		sp.editable = id != ""
-	w_axial_spin.value = float(current_world.get("axial_tilt_deg", 23.44))
-	w_day_hours_spin.value = float(current_world.get("day_hours", 24.0))
+	# [m2.1 隐藏·下版本可能启用] axial_tilt_deg / day_hours 的回填行
 	w_temp_sigma_spin.value = float(current_world.get("month_temp_sigma", 2.2))
 	w_smooth_spin.value = float(current_world.get("month_smoothing", 0.5))
 	w_total_spin.value = float(current_world.get("monthly_total_strength", 0.0))
@@ -572,14 +577,6 @@ func _save_phen_tab() -> void:
 		_set_status("已保存 Worlds/%s.phenomena.json 与本地化" % phen_world_id)
 	else:
 		_set_status("保存失败（%d）" % err)
-
-
-## 可关闭的系统窗口：独立打开（批处理/主场景）→ 退出；从主程序打开 → 真关闭并释放。
-func _on_close_requested() -> void:
-	if get_parent() == get_tree().root:
-		get_tree().quit()
-	else:
-		queue_free()
 
 
 func _save_world_tab() -> void:

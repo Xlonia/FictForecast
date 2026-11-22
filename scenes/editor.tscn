@@ -3,11 +3,13 @@
 [ext_resource type="Script" path="res://scripts/settings_editor.gd" id="1_editor"]
 [ext_resource type="Theme" path="res://theme/main_theme.tres" id="2_theme"]
 
-[node name="EditorRoot" type="Window"]
-title = "设置编辑器 · 幻想气象局"
-size = Vector2i(980, 680)
-min_size = Vector2i(880, 600)
-embedded = false
+[node name="EditorRoot" type="Control"]
+layout_mode = 3
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
 script = ExtResource("1_editor")
 
 [node name="Root" type="MarginContainer" parent="."]
@@ -118,30 +120,32 @@ columns = 4
 theme_override_constants/h_separation = 12
 theme_override_constants/v_separation = 4
 
-[node name="L1" type="Label" parent="Root/Column/Tabs/WorldTab/Form/ParamSection/Grid"]
-layout_mode = 2
-theme_override_colors/font_color = Color(0.62, 0.69, 0.8, 1)
-text = "地轴倾斜角 axial_tilt_deg"
-
-[node name="WAxialSpin" type="SpinBox" parent="Root/Column/Tabs/WorldTab/Form/ParamSection/Grid"]
-custom_minimum_size = Vector2(110, 0)
-layout_mode = 2
-max_value = 90.0
-step = 0.01
-value = 23.44
-
-[node name="L2" type="Label" parent="Root/Column/Tabs/WorldTab/Form/ParamSection/Grid"]
-layout_mode = 2
-theme_override_colors/font_color = Color(0.62, 0.69, 0.8, 1)
-text = "一日小时数 day_hours"
-
-[node name="WDayHoursSpin" type="SpinBox" parent="Root/Column/Tabs/WorldTab/Form/ParamSection/Grid"]
-custom_minimum_size = Vector2(110, 0)
-layout_mode = 2
-min_value = 1.0
-max_value = 100.0
-step = 0.1
-value = 24.0
+; —— m2.1 批复：以下两项（地轴倾斜角 axial_tilt_deg / 一日小时数 day_hours）属超前参数，
+; —— 暂用注释隐藏，留待后续版本（日照/昼夜模型实装时）恢复。
+; [node name="L1" type="Label" parent="Root/Column/Tabs/WorldTab/Form/ParamSection/Grid"]
+; layout_mode = 2
+; theme_override_colors/font_color = Color(0.62, 0.69, 0.8, 1)
+; text = "地轴倾斜角 axial_tilt_deg"
+;
+; [node name="WAxialSpin" type="SpinBox" parent="Root/Column/Tabs/WorldTab/Form/ParamSection/Grid"]
+; custom_minimum_size = Vector2(110, 0)
+; layout_mode = 2
+; max_value = 90.0
+; step = 0.01
+; value = 23.44
+;
+; [node name="L2" type="Label" parent="Root/Column/Tabs/WorldTab/Form/ParamSection/Grid"]
+; layout_mode = 2
+; theme_override_colors/font_color = Color(0.62, 0.69, 0.8, 1)
+; text = "一日小时数 day_hours"
+;
+; [node name="WDayHoursSpin" type="SpinBox" parent="Root/Column/Tabs/WorldTab/Form/ParamSection/Grid"]
+; custom_minimum_size = Vector2(110, 0)
+; layout_mode = 2
+; min_value = 1.0
+; max_value = 100.0
+; step = 0.1
+; value = 24.0
 
 [node name="L3" type="Label" parent="Root/Column/Tabs/WorldTab/Form/ParamSection/Grid"]
 layout_mode = 2

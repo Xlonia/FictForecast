@@ -113,6 +113,8 @@ func _init() -> void:
 	# —— 9. 世界随机搭台（WorldRng）——
 	_check(WorldRng.stable_day_number(1970, 1, 2) == 0, "历法锚点日序为 0")
 	_check(WorldRng.stable_day_number(1970, 1, 1) == 1, "锚点前一日镜像为 1（绕锚点折返）")
+	_check(WorldRng.mirror_minutes(-90) == 90 and WorldRng.mirror_minutes(30) == 30,
+			"时间轨分钟镜像（双轨：与日期轨无关）")
 	var dn_old := WorldRng.stable_day_number(1862, 6, 15)
 	_check(dn_old > 0, "锚点前日期镜像为正（%d）" % dn_old)
 	_check(WorldRng.stable_day_number(1800, 6, 15) > dn_old, "越早的日期镜像后越大")

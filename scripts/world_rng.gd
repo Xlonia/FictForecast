@@ -20,8 +20,10 @@ const ANCHOR_DAY := 2
 const INT_MASK := 0x7FFFFFFF  # 名字码折叠上限 2^31，避免 64 位乘法溢出
 
 
-## 恒定日历日序号：自锚点（1970-01-02）起算；锚点之前绕锚点镜像折返为正。
+## 恒定日历日序号（**日期轨**）：自锚点（1970-01-02）起算；锚点之前绕锚点镜像折返为正。
 ## 任何公历日期都得到一个非负整数，接缝处（1970-01-01 → 1，锚点日 → 0）连续单调。
+## m2.1 批复：时间戳**双轨**——日期与时间分开。日期轨只处理“日”，
+## 日种子直接对应日期，不会把纯分钟换算进日期；分钟走时间轨（见 mirror_minutes）。
 static func stable_day_number(year: int, month: int, day: int) -> int:
 	var t := int(Time.get_unix_time_from_datetime_dict({
 		"year": year, "month": month, "day": day,
@@ -30,6 +32,13 @@ static func stable_day_number(year: int, month: int, day: int) -> int:
 	var days_since_epoch := int(floor(float(t) / 86400.0))
 	var rel := days_since_epoch - 1  # 锚点是 unix 纪元后第 1 天
 	return rel if rel >= 0 else -rel
+
+
+## 时间轨（**当日分钟**）：锚点为当日 00:00，负分钟镜像折返为正。
+## 与日期轨独立——跨 00:00 的镜像不会把分钟换成日期（m2.1 批复“去掉纯分钟换算日期”）。
+## 供后续时间系统/分钟级种子使用；当前引擎尚未消费。
+static func mirror_minutes(minute_of_day: int) -> int:
+	return minute_of_day if minute_of_day >= 0 else -minute_of_day
 
 
 ## （备选）按“年”镜像：批复示例口径（1862 → 1970+(1970-1862) = 2108）。

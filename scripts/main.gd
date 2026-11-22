@@ -350,17 +350,41 @@ func _on_main_menu(id: int) -> void:
 			get_tree().quit()
 
 
-const EDITOR_SCENE := preload("res://scenes/editor.tscn")
-var _editor_window: Window = null
+var editor_process_pid: int = 0
 
 
-## 打开设置编辑器（独立原生窗口；用户关闭窗口时实例被释放，可再次打开）。
+## 打开设置编辑器（THX 系列惯例：独立进程启动，整窗即编辑器，
+## 可拖动/缩放/关闭，与游戏主程序互不影响）。
 func _open_settings_editor() -> void:
-	if _editor_window == null or not is_instance_valid(_editor_window):
-		_editor_window = EDITOR_SCENE.instantiate()
-		add_child(_editor_window)
-		_editor_window.tree_exited.connect(func() -> void: _editor_window = null)
-	_editor_window.show()
+	if editor_process_pid > 0 and OS.is_process_running(editor_process_pid):
+		status_label.text = "设置编辑器已在运行（独立窗口）"
+		return
+	var exe := OS.get_executable_path()
+	var proj := ProjectSettings.globalize_path("res://")
+	editor_process_pid = OS.create_process(exe, ["--path", proj, "res://scenes/editor.tscn"])
+	if editor_process_pid <= 0:
+		editor_process_pid = 0
+		status_label.text = "设置编辑器启动失败"
+	else:
+		status_label.text = "已启动设置编辑器（独立窗口）"
+
+
+## 主程序退出时主动击杀自己拉起的编辑器进程——
+## 是“主程序执行的返回动作”，而不是靠子窗口关系连带关闭（m2.1 批复）。
+func _kill_editor_process() -> void:
+	if editor_process_pid > 0 and OS.is_process_running(editor_process_pid):
+		OS.kill(editor_process_pid)
+	editor_process_pid = 0
+
+
+func _notification(what: int) -> void:
+	if what == NOTIFICATION_WM_CLOSE_REQUEST:
+		_kill_editor_process()
+		get_tree().quit()
+
+
+func _exit_tree() -> void:
+	_kill_editor_process()
 
 
 ## 城市显示名：本地化 zh.yaml 优先，缺失回退文件名 capitalize。
