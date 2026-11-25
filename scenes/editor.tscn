@@ -271,7 +271,8 @@ text = "经度 long"
 [node name="LongSpin" type="SpinBox" parent="Root/Column/Tabs/CityTab/Scroll/Form/GeoRow"]
 custom_minimum_size = Vector2(120, 0)
 layout_mode = 2
-max_value = 360.0
+min_value = -180.0
+max_value = 180.0
 step = 0.01
 
 [node name="LatiKey" type="Label" parent="Root/Column/Tabs/CityTab/Scroll/Form/GeoRow"]
@@ -282,7 +283,8 @@ text = "纬度 lati"
 [node name="LatiSpin" type="SpinBox" parent="Root/Column/Tabs/CityTab/Scroll/Form/GeoRow"]
 custom_minimum_size = Vector2(120, 0)
 layout_mode = 2
-max_value = 360.0
+min_value = -90.0
+max_value = 90.0
 step = 0.01
 
 [node name="AltiKey" type="Label" parent="Root/Column/Tabs/CityTab/Scroll/Form/GeoRow"]
@@ -688,6 +690,10 @@ theme_override_constants/separation = 8
 layout_mode = 2
 theme_override_constants/separation = 8
 
+[node name="MapWorldPick" type="OptionButton" parent="Root/Column/Tabs/MapTab/MapTop"]
+layout_mode = 2
+size_flags_horizontal = 3
+
 [node name="MapCityPick" type="OptionButton" parent="Root/Column/Tabs/MapTab/MapTop"]
 layout_mode = 2
 size_flags_horizontal = 3
@@ -696,10 +702,62 @@ size_flags_horizontal = 3
 layout_mode = 2
 text = "加载参考图…"
 
-[node name="MapHint" type="Label" parent="Root/Column/Tabs/MapTab/MapTop"]
+[node name="MapCfg" type="HBoxContainer" parent="Root/Column/Tabs/MapTab"]
+layout_mode = 2
+theme_override_constants/separation = 8
+
+[node name="ProjKey" type="Label" parent="Root/Column/Tabs/MapTab/MapCfg"]
+layout_mode = 2
+theme_override_colors/font_color = Color(0.62, 0.69, 0.8, 1)
+text = "投影"
+
+[node name="MapProjPick" type="OptionButton" parent="Root/Column/Tabs/MapTab/MapCfg"]
+custom_minimum_size = Vector2(176, 0)
+layout_mode = 2
+
+[node name="LatKey" type="Label" parent="Root/Column/Tabs/MapTab/MapCfg"]
+layout_mode = 2
+theme_override_colors/font_color = Color(0.62, 0.69, 0.8, 1)
+text = "纬度上限 ±"
+
+[node name="MapLatLimitSpin" type="SpinBox" parent="Root/Column/Tabs/MapTab/MapCfg"]
+custom_minimum_size = Vector2(104, 0)
+layout_mode = 2
+min_value = 1.0
+max_value = 89.9
+step = 0.01
+value = 70.0
+suffix = "°"
+
+[node name="MapAspectBtn" type="Button" parent="Root/Column/Tabs/MapTab/MapCfg"]
+layout_mode = 2
+tooltip_text = "整圈 360° 宽的墨卡托图：由图片宽高比反推纬度上限（方图 ≈ ±85.05°）"
+text = "按图片比例推算"
+
+[node name="CenterKey" type="Label" parent="Root/Column/Tabs/MapTab/MapCfg"]
+layout_mode = 2
+theme_override_colors/font_color = Color(0.62, 0.69, 0.8, 1)
+text = "中央经线"
+
+[node name="MapCenterSpin" type="SpinBox" parent="Root/Column/Tabs/MapTab/MapCfg"]
+custom_minimum_size = Vector2(104, 0)
+layout_mode = 2
+min_value = -180.0
+max_value = 180.0
+step = 0.01
+suffix = "°"
+
+[node name="MapPickZeroBtn" type="Button" parent="Root/Column/Tabs/MapTab/MapCfg"]
+layout_mode = 2
+tooltip_text = "在参考图上点击 0° 经线所在的一列，自动换算中央经线"
+toggle_mode = true
+text = "点选 0° 经线"
+
+[node name="MapReadout" type="Label" parent="Root/Column/Tabs/MapTab"]
 layout_mode = 2
 theme_override_colors/font_color = Color(0.55, 0.62, 0.72, 1)
-text = "原型：等距圆柱假设（每像素=等度数）；点击地图给选中城市定点经纬度，点击即存"
+theme_override_font_sizes/font_size = 13
+text = "参考图按整圈 360° 经度铺满。"
 
 [node name="MapView" type="Control" parent="Root/Column/Tabs/MapTab"]
 layout_mode = 2

@@ -1,8 +1,9 @@
-[gd_scene load_steps=7 format=3]
+[gd_scene load_steps=8 format=3]
 
 [ext_resource type="Script" path="res://scripts/main.gd" id="1_main"]
 [ext_resource type="Script" path="res://scripts/weather_icon.gd" id="2_icon"]
 [ext_resource type="Theme" path="res://theme/main_theme.tres" id="3_theme"]
+[ext_resource type="PackedScene" path="res://scenes/preferences.tscn" id="4_prefs"]
 
 [sub_resource type="StyleBoxFlat" id="sb_panel"]
 content_margin_left = 18.0
@@ -249,3 +250,6 @@ layout_mode = 2
 theme_override_colors/font_color = Color(0.55, 0.62, 0.72, 1)
 theme_override_font_sizes/font_size = 13
 text = "正在启动…"
+autowrap_mode = 3
+
+[node name="Preferences" parent="." instance=ExtResource("4_prefs")]

@@ -3,19 +3,22 @@ extends RefCounted
 ## 城市与世界的配置存取（JSON）+ 本地化（MiniYaml）。
 ##
 ## 目录约定（随工程走；导出后迁移到用户目录是后续工作）：
-##   res://Worlds/<世界ID>.json   世界设置：seed / base_times / base_dates
+##   res://Worlds/<世界ID>.json   世界设置：seed / base_times / base_dates / map（参考图与投影）
 ##   res://Cities/<城市ID>.json   城市设置：long/lati/alti/times/timez/calendar/wallpaper/effects
 ##                                （城市ID = Climate/<城市ID>.csv 的文件名；name 走本地化 YAML）
-##   res://Localization/zh.yaml   本地化：组 cities / worlds 下的 键 → 显示名
+##   res://Localization/<语言>.yaml  本地化：一语言一文件；组 cities / worlds 下的 键 → 显示名
+##   user://preferences.json      软件偏好（凌驾于世界/城市设置之上；每台机器每个用户一份）
 ##
 ## 字段骨架严格对应《幻想气象局.md》的「城市设置」「世界设置」两节。
 ## 默认值策略（文档口径）：times/calendar 非法或留空 → UTC / 公历；
 ## world 字段为本次新增的骨架决定（城市归属哪个世界，文档未明列但结构上必需）。
+## zh 是显示名的基准语言：其它语言缺条目时回退到 zh（编辑器里录入的名字）。
 
 const WORLDS_DIR := "res://Worlds"
 const CITIES_DIR := "res://Cities"
 const LOC_DIR := "res://Localization"
 const LOC_FILE := "res://Localization/zh.yaml"
+const DEFAULT_LANG := "zh"
 
 const WORLD_DEFAULTS := {
 	"seed": "",
@@ -29,6 +32,15 @@ const WORLD_DEFAULTS := {
 	"monthly_total_strength": 0.0,   # 月总量对账强度 0..1——“凑齐降水和月积温”（引擎未实装，先摆位）
 	"phenomena_spread_days": 7.0,    # 现象出现日期离散（正态 σ·天）——“分布系数由用户来调整”
 	"annual_compensation": 0.0,      # 年度补偿强度 0..1——异常雨热三步中和的 AB/B 步骤（引擎未实装，先摆位）
+	"map": {},  # 世界参考图与投影 { image, projection, lat_limit, center_long }——骨架见 MapProjection.DEFAULTS
+}
+
+## 软件偏好（《幻想气象局.md》「软件系统设置」）。文件：user://preferences.json。
+const PREFS_DEFAULTS := {
+	"default_city": "",       # 偏好城市：启动时默认展示的城市 ID；留空 = 上次展示的城市
+	"last_city": "",          # 上次展示的城市 ID（程序自动记录，启动时用它回填）
+	"city_name_lang": "zh",   # 城市名称语言：读 Localization/<语言>.yaml 的 cities 组，缺条目回退 zh
+	"panel_opacity": 0.9,     # 界面背景不透明度 0..1（1 = 完全不透明）
 }
 
 const CITY_DEFAULTS := {
@@ -44,6 +56,26 @@ const CITY_DEFAULTS := {
 }
 
 static var _loc_cache := {}  # 本地化文件路径 → 数据（编辑器保存时刷新）
+
+static var _prefs_file := ""  # 偏好文件路径缓存；开发辅助 FF_PREFS_FILE 可重定向（测试不污染真实偏好）
+
+
+## 偏好文件路径：默认 user://preferences.json。
+static func prefs_path() -> String:
+	if _prefs_file.is_empty():
+		var env := OS.get_environment("FF_PREFS_FILE")
+		_prefs_file = env if not env.is_empty() else "user://preferences.json"
+	return _prefs_file
+
+
+static func load_preferences() -> Dictionary:
+	var out := _load_json(prefs_path(), PREFS_DEFAULTS)
+	out["panel_opacity"] = clampf(float(out["panel_opacity"]), 0.0, 1.0)
+	return out
+
+
+static func save_preferences(data: Dictionary) -> Error:
+	return _save_json(prefs_path(), data)
 
 
 ## 创建目录与默认文件（已存在则不覆盖）。
@@ -178,24 +210,34 @@ static func invalidate_localization_cache() -> void:
 	_loc_cache.clear()
 
 
-## 城市显示名：本地化 cities.<id>，缺失返回 ""（调用方自行回退）。
-static func city_display_name(id: String) -> String:
-	var res := load_localization()
-	var cities: Dictionary = res.data.get("cities", {})
-	return str(cities.get(id, ""))
+## 城市显示名：所选语言的 cities.<id>，缺失回退 zh，仍缺失返回 ""（调用方自行回退）。
+static func city_display_name(id: String, lang: String = DEFAULT_LANG) -> String:
+	return _loc_lookup("cities", id, lang)
 
 
-## 世界显示名：本地化 worlds.<id>，缺失返回 ""。
-static func world_display_name(id: String) -> String:
-	var res := load_localization()
-	var worlds: Dictionary = res.data.get("worlds", {})
-	return str(worlds.get(id, ""))
+## 世界显示名：所选语言的 worlds.<id>，缺失回退 zh，仍缺失返回 ""。
+static func world_display_name(id: String, lang: String = DEFAULT_LANG) -> String:
+	return _loc_lookup("worlds", id, lang)
 
 
+static func _loc_lookup(group: String, key: String, lang: String) -> String:
+	if lang != DEFAULT_LANG:
+		var res := load_localization_file(loc_path(lang))
+		var entries: Dictionary = res.data.get(group, {})
+		var v := str(entries.get(key, ""))
+		if not v.is_empty():
+			return v
+	var base := load_localization()
+	var base_entries: Dictionary = base.data.get(group, {})
+	return str(base_entries.get(key, ""))
+
+
+## 读 JSON 并与默认骨架合并。文件里缺的键取默认值——**容器类默认值必须深拷贝**：
+## 常量容器在运行期是只读的，直接引用会让缺键字段改不动（改写被静默拒绝并报错）。
 static func _load_json(path: String, defaults: Dictionary) -> Dictionary:
 	var out := {}
 	for k in defaults:
-		out[k] = defaults[k]
+		out[k] = _writable(defaults[k])
 	if not FileAccess.file_exists(path):
 		return out
 	var f := FileAccess.open(path, FileAccess.READ)
@@ -229,3 +271,10 @@ static func _type_ok(v, ref) -> bool:
 		TYPE_ARRAY:
 			return typeof(v) == TYPE_ARRAY
 	return true
+
+
+## 常量容器 → 可写的深拷贝；标量原样返回。
+static func _writable(v: Variant) -> Variant:
+	if typeof(v) == TYPE_DICTIONARY or typeof(v) == TYPE_ARRAY:
+		return v.duplicate(true)
+	return v

@@ -54,13 +54,23 @@ var _dirty_timer: Timer
 @onready var effect_rows: VBoxContainer = $Root/Column/Tabs/CityTab/Scroll/Form/EffectSection/Rows
 @onready var effect_add_btn: Button = $Root/Column/Tabs/CityTab/Scroll/Form/EffectSection/AddBtn
 
-# —— 地图锚定原型页（等距圆柱假设；墨卡托与参考图规范归 m5）——
+# —— 地图页：参考图 + 投影 + 中央经线（挂在当前世界文档上）；城市定点（点击即存）——
+@onready var map_world_pick: OptionButton = $Root/Column/Tabs/MapTab/MapTop/MapWorldPick
 @onready var map_city_pick: OptionButton = $Root/Column/Tabs/MapTab/MapTop/MapCityPick
 @onready var map_load_btn: Button = $Root/Column/Tabs/MapTab/MapTop/MapLoadBtn
+@onready var map_proj_pick: OptionButton = $Root/Column/Tabs/MapTab/MapCfg/MapProjPick
+@onready var map_lat_limit_spin: SpinBox = $Root/Column/Tabs/MapTab/MapCfg/MapLatLimitSpin
+@onready var map_aspect_btn: Button = $Root/Column/Tabs/MapTab/MapCfg/MapAspectBtn
+@onready var map_center_spin: SpinBox = $Root/Column/Tabs/MapTab/MapCfg/MapCenterSpin
+@onready var map_pick_zero_btn: Button = $Root/Column/Tabs/MapTab/MapCfg/MapPickZeroBtn
+@onready var map_readout: Label = $Root/Column/Tabs/MapTab/MapReadout
 @onready var map_view: Control = $Root/Column/Tabs/MapTab/MapView
 
 var map_texture: Texture2D = null
 var map_city_id := ""
+var _map_tex_path := ""      # 已加载的参考图路径（路径没变就不重复读盘）
+var _map_hover_ll := Vector2.INF  # 鼠标处经纬度（x=纬度 y=经度）；不在图内为 INF
+var _map_syncing := false    # 控件回填期间屏蔽 value_changed 回写
 var _map_dialog: FileDialog
 
 # —— 本地化页 ——
@@ -133,15 +143,29 @@ func _ready() -> void:
 	_refresh_loc_languages()
 	_select_loc_lang("zh" if SettingsStore.list_languages().has("zh") else SettingsStore.list_languages()[0])
 
-	# —— 地图锚定原型 ——
-	_refresh_map_cities()
-	map_load_btn.pressed.connect(_on_map_load)
+	# —— 地图页 ——
+	for pair in [[MapProjection.MERCATOR, "墨卡托 mercator"],
+			[MapProjection.EQUIRECTANGULAR, "等距圆柱 equirectangular"]]:
+		map_proj_pick.add_item(pair[1], 0)
+		map_proj_pick.set_item_metadata(map_proj_pick.item_count - 1, pair[0])
+	_sync_map_controls()
+	map_world_pick.item_selected.connect(_on_map_world_picked)
 	map_city_pick.item_selected.connect(_on_map_city_picked)
+	map_load_btn.pressed.connect(_on_map_load)
+	map_proj_pick.item_selected.connect(_on_map_proj_picked)
+	map_lat_limit_spin.value_changed.connect(_on_map_lat_limit_changed)
+	map_center_spin.value_changed.connect(_on_map_center_changed)
+	map_aspect_btn.pressed.connect(_on_map_aspect_pressed)
+	map_pick_zero_btn.toggled.connect(_on_map_pick_zero_toggled)
 	map_view.draw.connect(_draw_map_view)
 	map_view.gui_input.connect(_on_map_gui_input)
+	map_view.mouse_exited.connect(func() -> void:
+		_map_hover_ll = Vector2.INF
+		_update_map_readout())
 	_map_dialog = FileDialog.new()
+	_map_dialog.file_mode = FileDialog.FILE_MODE_OPEN_FILE  # 选已有的图片（默认是保存模式，按钮会变成 Save）
 	_map_dialog.access = FileDialog.ACCESS_FILESYSTEM
-	_map_dialog.title = "选择世界参考图（等距圆柱：全图 = 经度 -180..180，纬度 90..-90）"
+	_map_dialog.title = "选择世界参考图（整圈 360° 经度铺满图宽）"
 	_map_dialog.filters = PackedStringArray(["*.png ; PNG 图片", "*.jpg ; JPEG 图片", "*.webp ; WebP 图片"])
 	_map_dialog.file_selected.connect(_on_map_file)
 	add_child(_map_dialog)
@@ -257,11 +281,16 @@ func _refresh_worlds() -> void:
 	if world_ids.is_empty():
 		world_pick.add_item("（Worlds/ 下没有世界文件）", 0)
 		world_pick.set_item_disabled(0, true)
+	_refresh_map_worlds()
 
 
 func _select_world(id: String) -> void:
 	current_world_id = id
 	current_world = SettingsStore.load_world(id) if id != "" else {}
+	if id != "":
+		# 地图配置补全骨架（旧世界文件没有 map 字段），保存时随世界 JSON 落盘
+		var m = current_world.get("map")
+		current_world["map"] = MapProjection.normalized(m if typeof(m) == TYPE_DICTIONARY else {})
 	for i in world_pick.item_count:
 		if str(world_pick.get_item_metadata(i)) == id:
 			world_pick.select(i)
@@ -281,6 +310,7 @@ func _select_world(id: String) -> void:
 	_rebuild_date_rows()
 	if current_world_id != "":
 		_snapshot("world:" + current_world_id, current_world)
+	_sync_map_controls()
 
 
 func _on_world_picked(index: int) -> void:
@@ -298,7 +328,9 @@ func _on_world_created() -> void:
 	if world_ids.has(id):
 		_set_status("世界 %s 已存在" % id)
 		return
-	SettingsStore.save_world(id, SettingsStore.WORLD_DEFAULTS.duplicate(true))
+	var fresh: Dictionary = SettingsStore.WORLD_DEFAULTS.duplicate(true)
+	fresh["map"] = MapProjection.normalized({})  # 新世界文件直接带完整的地图骨架
+	SettingsStore.save_world(id, fresh)
 	_ensure_loc_group("worlds")[id] = id
 	_refresh_worlds()
 	_select_world(id)
@@ -449,6 +481,7 @@ func _on_city_world_ref(index: int) -> void:
 		return
 	current_city["world"] = str(world_ref_pick.get_item_metadata(index))
 	_rebuild_system_picks()
+	_refresh_map_cities()  # 地图页按“所属世界”列城市
 
 
 func _rebuild_system_picks() -> void:
@@ -672,7 +705,8 @@ func _on_save() -> void:
 		2:
 			_save_phen_tab()
 		3:
-			_set_status("地图页为点击即存（原型），无需手动保存")
+			# 地图配置是当前世界文档的一部分（与「世界」页共用草稿）；城市定点则点击即存
+			_save_world_tab()
 		4:
 			_save_loc_tab()
 
@@ -1150,20 +1184,101 @@ func _on_kf_add() -> void:
 	_rebuild_kf_rows()
 
 
-# ———————— 地图锚定原型页（等距圆柱假设）——————
+# ———————— 地图页：参考图 + 投影 + 中央经线；城市定点（点击即存）——————
+## 地图配置（image / projection / lat_limit / center_long）挂在**当前世界文档**上，
+## 与「世界」页共用同一份草稿：改动进内存，「保存当前页」落盘。
+## 城市定点则是原型口径：点击即写入城市 JSON。
+
+## 当前世界的地图配置（可写引用——改它就是改世界草稿）。
+func _map_cfg() -> Dictionary:
+	if current_world.is_empty():
+		return MapProjection.normalized({})
+	if typeof(current_world.get("map")) != TYPE_DICTIONARY:
+		current_world["map"] = MapProjection.normalized({})
+	return current_world["map"]
+
+
+func _refresh_map_worlds() -> void:
+	_map_syncing = true
+	map_world_pick.clear()
+	for id in world_ids:
+		var disp := SettingsStore.world_display_name(id)
+		map_world_pick.add_item(id if disp.is_empty() else "%s（%s）" % [id, disp], 0)
+		map_world_pick.set_item_metadata(map_world_pick.item_count - 1, id)
+	if world_ids.is_empty():
+		map_world_pick.add_item("（Worlds/ 下没有世界文件）", 0)
+		map_world_pick.set_item_disabled(0, true)
+	for i in map_world_pick.item_count:
+		if str(map_world_pick.get_item_metadata(i)) == current_world_id:
+			map_world_pick.select(i)
+	_map_syncing = false
+
+
+func _on_map_world_picked(index: int) -> void:
+	_select_world(str(map_world_pick.get_item_metadata(index)))
+
+
+## 把世界文档里的地图配置回填到控件（回填期间屏蔽回写），并按需重新加载参考图。
+func _sync_map_controls() -> void:
+	_map_syncing = true
+	var cfg := _map_cfg()
+	var has_world := current_world_id != ""
+	for i in map_world_pick.item_count:
+		if str(map_world_pick.get_item_metadata(i)) == current_world_id:
+			map_world_pick.select(i)
+	for i in map_proj_pick.item_count:
+		if str(map_proj_pick.get_item_metadata(i)) == str(cfg["projection"]):
+			map_proj_pick.select(i)
+	map_lat_limit_spin.value = float(cfg["lat_limit"])
+	map_center_spin.value = float(cfg["center_long"])
+	map_proj_pick.disabled = not has_world
+	map_lat_limit_spin.editable = has_world
+	map_center_spin.editable = has_world
+	map_load_btn.disabled = not has_world
+	if str(cfg["image"]) != _map_tex_path:
+		_load_map_texture(str(cfg["image"]))
+	map_aspect_btn.disabled = not (map_texture != null
+			and str(cfg["projection"]) == MapProjection.MERCATOR)
+	if map_pick_zero_btn.button_pressed and map_texture == null:
+		map_pick_zero_btn.button_pressed = false
+	map_pick_zero_btn.disabled = map_texture == null
+	_map_syncing = false
+	_refresh_map_cities()
+	_update_map_readout()
+	map_view.queue_redraw()
+
+
+func _load_map_texture(path: String) -> void:
+	_map_tex_path = path
+	map_texture = null
+	if path.is_empty():
+		return
+	var img := Image.load_from_file(path)
+	if img == null or img.is_empty():
+		_set_status("参考图加载失败：%s" % path)
+		return
+	map_texture = ImageTexture.create_from_image(img)
+
 
 func _refresh_map_cities() -> void:
 	map_city_pick.clear()
+	var ids: Array[String] = []
 	for id in city_ids:
+		if current_world_id != "" and str(SettingsStore.load_city(id).get("world", "")) == current_world_id:
+			ids.append(id)
+	for id in ids:
 		var disp := SettingsStore.city_display_name(id)
 		map_city_pick.add_item(id if disp.is_empty() else "%s（%s）" % [id, disp], 0)
 		map_city_pick.set_item_metadata(map_city_pick.item_count - 1, id)
-	var want := map_city_id if map_city_id != "" else (city_ids[0] if not city_ids.is_empty() else "")
-	map_city_id = want
+	if ids.is_empty():
+		map_city_pick.add_item("（该世界下暂无城市——先到「城市」页指定所属世界）", 0)
+		map_city_pick.set_item_disabled(0, true)
+	if not ids.has(map_city_id):
+		map_city_id = ids[0] if not ids.is_empty() else ""
 	for i in map_city_pick.item_count:
-		if str(map_city_pick.get_item_metadata(i)) == want:
+		if str(map_city_pick.get_item_metadata(i)) == map_city_id:
 			map_city_pick.select(i)
-			break
+	map_view.queue_redraw()
 
 
 func _on_map_city_picked(index: int) -> void:
@@ -1176,13 +1291,61 @@ func _on_map_load() -> void:
 
 
 func _on_map_file(path: String) -> void:
+	if current_world_id.is_empty():
+		_set_status("请先选择世界——参考图挂在世界上")
+		return
 	var img := Image.load_from_file(path)
-	if img == null:
+	if img == null or img.is_empty():
 		_set_status("参考图加载失败：%s" % path)
 		return
-	map_texture = ImageTexture.create_from_image(img)
+	_map_cfg()["image"] = path
+	_load_map_texture(path)
+	_sync_map_controls()
+	_set_status("参考图已加载（%d×%d）——点击给选中城市定点；图片路径随「保存当前页」写入世界 JSON" % [
+		img.get_width(), img.get_height()])
+
+
+func _on_map_proj_picked(index: int) -> void:
+	if _map_syncing or current_world_id.is_empty():
+		return
+	_map_cfg()["projection"] = str(map_proj_pick.get_item_metadata(index))
+	_sync_map_controls()
+
+
+func _on_map_lat_limit_changed(v: float) -> void:
+	if _map_syncing or current_world_id.is_empty():
+		return
+	_map_cfg()["lat_limit"] = _round2(v)
 	map_view.queue_redraw()
-	_set_status("参考图已加载（%d×%d）——点击地图给城市定点经纬度" % [img.get_width(), img.get_height()])
+
+
+func _on_map_center_changed(v: float) -> void:
+	if _map_syncing or current_world_id.is_empty():
+		return
+	_map_cfg()["center_long"] = _round2(v)
+	map_view.queue_redraw()
+
+
+## 整圈 360° 宽的真墨卡托图：由图片宽高比反推纬度上限。
+func _on_map_aspect_pressed() -> void:
+	if map_texture == null:
+		return
+	var lim := MapProjection.lat_limit_from_aspect(map_texture.get_width(), map_texture.get_height())
+	map_lat_limit_spin.value = _round2(lim)
+	_set_status("按图片宽高比推算：整圈 360° 宽的墨卡托图，纬度上限 ≈ ±%.2f°（记得保存）" % lim)
+
+
+func _on_map_pick_zero_toggled(_pressed: bool) -> void:
+	_update_map_readout()
+
+
+func _update_map_readout() -> void:
+	if map_pick_zero_btn.button_pressed:
+		map_readout.text = "点选 0° 经线：在参考图上点击 0° 经线所在的一列（此状态下点击不会给城市定点）"
+	elif _map_hover_ll.x != INF:
+		map_readout.text = "鼠标处：经度 %.2f°   纬度 %.2f°" % [_map_hover_ll.y, _map_hover_ll.x]
+	else:
+		map_readout.text = "参考图按整圈 360° 经度铺满。点击给选中城市定点（即存）；投影 / 纬度上限 / 中央经线的改动用「保存当前页」落盘"
 
 
 ## 参考图在 MapView 内的适配矩形（保持纵横比，留 8px 边距）。
@@ -1196,76 +1359,138 @@ func _map_fit_rect() -> Rect2:
 	return Rect2((map_view.size - size) * 0.5, size)
 
 
-func _latlong_to_px(lati: float, long: float, rect: Rect2) -> Vector2:
-	return Vector2(
-		rect.position.x + (long + 180.0) / 360.0 * rect.size.x,
-		rect.position.y + (90.0 - lati) / 180.0 * rect.size.y)
+## MapView 像素 → 图片归一化坐标 (0..1, 0..1)。
+func _px_to_uv(px: Vector2, rect: Rect2) -> Vector2:
+	return Vector2((px.x - rect.position.x) / rect.size.x, (px.y - rect.position.y) / rect.size.y)
 
 
-func _px_to_latlong(px: Vector2, rect: Rect2) -> Vector2:
-	return Vector2(
-		90.0 - (px.y - rect.position.y) / rect.size.y * 180.0,
-		(px.x - rect.position.x) / rect.size.x * 360.0 - 180.0)
+func _uv_to_px(uv: Vector2, rect: Rect2) -> Vector2:
+	return rect.position + uv * rect.size
 
 
 func _draw_map_view() -> void:
 	var rect := _map_fit_rect()
 	if rect.size == Vector2.ZERO:
-		var f := get_theme_default_font()
-		map_view.draw_string(f, Vector2(12, 24), "先点“加载参考图…”（等距圆柱：全图 = 经度 -180..180，纬度 90..-90）",
+		map_view.draw_string(get_theme_default_font(), Vector2(12, 24),
+				"先选择世界并点「加载参考图…」（参考图须按整圈 360° 经度铺满图宽）",
 				HORIZONTAL_ALIGNMENT_LEFT, -1, 14, Color(0.7, 0.76, 0.86))
 		return
-	# 经纬网格（每 30°）
-	for i in range(13):
-		var x := rect.position.x + rect.size.x * i / 12.0
-		map_view.draw_line(Vector2(x, rect.position.y), Vector2(x, rect.end.y),
-				Color(1, 1, 1, 0.08), 1.0)
-	for i in range(7):
-		var y := rect.position.y + rect.size.y * i / 6.0
-		map_view.draw_line(Vector2(rect.position.x, y), Vector2(rect.end.x, y),
-				Color(1, 1, 1, 0.08), 1.0)
-	if map_texture != null:
-		map_view.draw_texture_rect(map_texture, rect, false)
-	# 城市标记
-	for id in city_ids:
+	var cfg := _map_cfg()
+	var font := get_theme_default_font()
+	# 先画图、再叠网格——网格压在参考图之上才看得见
+	map_view.draw_texture_rect(map_texture, rect, false)
+	for lon in range(-180, 180, 30):
+		var u := MapProjection.to_uv(0.0, float(lon), cfg).x
+		if u < 0.004 or u > 0.996:
+			continue
+		var x := rect.position.x + rect.size.x * u
+		var prime := lon == 0
+		var col := Color(1.0, 0.72, 0.3, 0.9) if prime else Color(1, 1, 1, 0.3)
+		map_view.draw_line(Vector2(x, rect.position.y), Vector2(x, rect.end.y), col, 2.0 if prime else 1.0)
+		_draw_map_label(font, Vector2(x + 4, rect.position.y + 18), _lon_label(lon),
+				Color(1.0, 0.72, 0.3) if prime else Color(1, 1, 1, 0.92))
+	for lat in [-60, -30, 0, 30, 60]:
+		var v := MapProjection.to_uv(float(lat), 0.0, cfg).y
+		if v < 0.02 or v > 0.98:
+			continue
+		var y := rect.position.y + rect.size.y * v
+		var equator: bool = lat == 0
+		var col := Color(1.0, 0.72, 0.3, 0.9) if equator else Color(1, 1, 1, 0.3)
+		map_view.draw_line(Vector2(rect.position.x, y), Vector2(rect.end.x, y), col, 2.0 if equator else 1.0)
+		_draw_map_label(font, Vector2(rect.position.x + 6, y - 5), _lat_label(lat),
+				Color(1.0, 0.72, 0.3) if equator else Color(1, 1, 1, 0.92))
+	map_view.draw_rect(rect, Color(1, 1, 1, 0.5), false, 1.0)
+	# 城市标记（只画当前世界下的城市，即下拉框里那些）
+	for i in map_city_pick.item_count:
+		var meta = map_city_pick.get_item_metadata(i)
+		if typeof(meta) != TYPE_STRING:
+			continue
+		var id: String = meta
 		var cd := SettingsStore.load_city(id)
-		var lati := float(cd.get("lati", 0.0))
-		var long := float(cd.get("long", 0.0))
-		var pos := _latlong_to_px(lati, long, rect)
+		var pos := _uv_to_px(MapProjection.to_uv(
+				float(cd.get("lati", 0.0)), float(cd.get("long", 0.0)), cfg), rect)
 		var is_current := id == map_city_id
-		var col := Color(1.0, 0.72, 0.30) if is_current else Color(0.55, 0.8, 1.0)
-		map_view.draw_circle(pos, 6.0 if is_current else 4.0, col)
+		var col := Color(1.0, 0.72, 0.3) if is_current else Color(0.55, 0.8, 1.0)
+		var r := 6.0 if is_current else 4.0
+		map_view.draw_circle(pos, r, col)
+		map_view.draw_arc(pos, r + 1.5, 0, TAU, 24, Color(0, 0, 0, 0.7), 1.5)
 		if is_current:
-			map_view.draw_arc(pos, 10.0, 0, TAU, 24, Color(1.0, 0.72, 0.30, 0.9), 2.0)
+			map_view.draw_arc(pos, 11.0, 0, TAU, 24, Color(1.0, 0.72, 0.3, 0.95), 2.0)
 		var name := SettingsStore.city_display_name(id)
-		if name.is_empty():
-			name = id
-		map_view.draw_string(get_theme_default_font(), pos + Vector2(12, -6),
-				name, HORIZONTAL_ALIGNMENT_LEFT, -1, 13, col)
+		_draw_map_label(font, pos + Vector2(11, -7), name if not name.is_empty() else id, col)
+
+
+func _draw_map_label(font: Font, pos: Vector2, text: String, col: Color) -> void:
+	map_view.draw_string_outline(font, pos, text, HORIZONTAL_ALIGNMENT_LEFT, -1, 13, 3, Color(0, 0, 0, 0.85))
+	map_view.draw_string(font, pos, text, HORIZONTAL_ALIGNMENT_LEFT, -1, 13, col)
+
+
+func _lon_label(lon: int) -> String:
+	if lon == 0:
+		return "0°"
+	if lon > 0:
+		return "%d°E" % lon
+	if lon == -180:
+		return "180°"
+	return "%d°W" % -lon
+
+
+func _lat_label(lat: int) -> String:
+	if lat == 0:
+		return "0° 赤道"
+	return "%d°N" % lat if lat > 0 else "%d°S" % -lat
 
 
 func _on_map_gui_input(event: InputEvent) -> void:
-	if event is InputEventMouseButton and event.pressed and event.button_index == MOUSE_BUTTON_LEFT:
-		var rect := _map_fit_rect()
-		var pos: Vector2 = (event as InputEventMouseButton).position
-		if rect.size == Vector2.ZERO or not rect.has_point(pos):
-			return
-		var ll := _px_to_latlong(pos, rect)
-		if map_city_id.is_empty():
-			_set_status("请先在地图页选择要定位的城市")
-			return
-		# 点击即存（原型）：写入城市 JSON，经纬度取两位小数
-		var cd := SettingsStore.load_city(map_city_id)
-		cd["long"] = snappedf(ll.y, 0.01)
-		cd["lati"] = snappedf(ll.x, 0.01)
-		var err := SettingsStore.save_city(map_city_id, cd)
-		if err == OK:
-			_refresh_cities()
-			_refresh_map_cities()
-			map_view.queue_redraw()
-			_set_status("已将 %s 定位到 %.2f°, %.2f°（等距圆柱假设）" % [map_city_id, cd.lati, cd.long])
+	var rect := _map_fit_rect()
+	if rect.size == Vector2.ZERO:
+		return
+	if event is InputEventMouseMotion:
+		var mpos: Vector2 = (event as InputEventMouseMotion).position
+		if rect.has_point(mpos):
+			_map_hover_ll = MapProjection.from_uv(_px_to_uv(mpos, rect), _map_cfg())
 		else:
-			_set_status("写入失败（%d）" % err)
+			_map_hover_ll = Vector2.INF
+		_update_map_readout()
+		return
+	var mb := event as InputEventMouseButton
+	if mb == null or not mb.pressed or mb.button_index != MOUSE_BUTTON_LEFT:
+		return
+	if not rect.has_point(mb.position):
+		return
+	var uv := _px_to_uv(mb.position, rect)
+	var ll := MapProjection.from_uv(uv, _map_cfg())
+	if map_pick_zero_btn.button_pressed:
+		# 把点中的一列认作 0° 经线 → 换算出图片中点的经度
+		var center := _round2(MapProjection.center_long_for_zero_at(uv.x))
+		_map_cfg()["center_long"] = center
+		map_pick_zero_btn.button_pressed = false
+		_sync_map_controls()
+		_set_status("已把该位置设为 0° 经线：中央经线 = %.2f°（记得保存）" % center)
+		return
+	if map_city_id.is_empty():
+		_set_status("请先在地图页选择要定位的城市")
+		return
+	# 点击即存（原型）：写入城市 JSON，经纬度取两位小数
+	var cd := SettingsStore.load_city(map_city_id)
+	cd["long"] = _round2(ll.y)
+	cd["lati"] = _round2(ll.x)
+	var err := SettingsStore.save_city(map_city_id, cd)
+	if err != OK:
+		_set_status("写入失败（%d）" % err)
+		return
+	# 该城市若正是「城市」页的当前文档：同步内存草稿、表单与快照——免得之后在「城市」页
+	# 保存时把旧坐标盖回去；快照一起改是为了不吞掉那份文档里其它的未保存改动
+	if map_city_id == current_city_id:
+		current_city["long"] = cd["long"]
+		current_city["lati"] = cd["lati"]
+		long_spin.value = cd["long"]
+		lati_spin.value = cd["lati"]
+		if _snapshots.has("city:" + current_city_id):
+			_snapshots["city:" + current_city_id]["long"] = cd["long"]
+			_snapshots["city:" + current_city_id]["lati"] = cd["lati"]
+	map_view.queue_redraw()
+	_set_status("已将 %s 定位到 纬度 %.2f°、经度 %.2f°" % [map_city_id, cd["lati"], cd["long"]])
 
 
 # ———————— 工具 ————————
@@ -1306,6 +1531,12 @@ func _join_list(value: Variant) -> String:
 	for x in value:
 		parts.append(str(x))
 	return ", ".join(parts)
+
+
+## 保留两位小数：round(x·100)/100——比按步长取整干净，不会把浮点毛刺写进 JSON。
+static func _round2(v: float) -> float:
+	var r := roundf(v * 100.0) / 100.0
+	return 0.0 if r == 0.0 else r  # 避免写出 "-0.0"
 
 
 func _set_status(text: String) -> void:

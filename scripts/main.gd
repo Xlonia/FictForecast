@@ -1,11 +1,15 @@
 extends Control
 ## 幻想气象局 · 主界面控制器
 ##
-## v1 范围：读取 Climate/*.csv 的逐月气候数据；模拟时间按可调流速推进；
-## 每天用「日照加权随机」抽出 晴/阴/雨，并给出日高低温与降雨可能。
-## 随机评分筛选机制尚未实装（引擎已按“单日候选”结构预留）。
+## 读取 Climate/*.csv 的逐月气候数据；模拟时钟按城市的时间系统（历法锚定 + 时区）显示；
+## 每天的天气由 WeatherEngine 按世界三层种子确定性生成（同一天永远同一份天气）。
+## 随机评分筛选机制尚未实装（月度预生成即其前置结构）。
 ##
-## 开发辅助：环境变量 FF_TIME_SCALE 可在启动时覆盖时间流速倍率。
+## 软件偏好（偏好城市 / 城市名称语言 / 界面背景不透明度）由本脚本持有并写盘，
+## 「偏好设置」窗口（嵌入主窗口的子窗口）只负责改数据。
+##
+## 开发辅助环境变量：FF_TIME_SCALE（时间流速）、FF_FORCE_SKY（强制天气型）、
+## FF_OPEN_EDITOR（启动即开编辑器）、FF_PREFS_FILE（重定向偏好文件，测试时不污染真实偏好）。
 
 const DATA_DIR := "res://Climate"
 
@@ -13,9 +17,22 @@ const ID_RELOAD := 100
 const ID_NEXT_DAY := 101
 const ID_EDITOR := 103
 const ID_RESUME_NOW := 104
+const ID_PREFS := 105
 const ID_QUIT := 102
 const ID_HELP_GUIDE := 200
 const ID_HELP_ABOUT := 201
+
+# 「界面背景不透明度」作用的五个面板
+const PANEL_PATHS := [
+	"Margin/Column/TopBar",
+	"Margin/Column/Body/StatsPanel",
+	"Margin/Column/Body/CenterPanel",
+	"Margin/Column/Body/MonthPanel",
+	"Margin/Column/StatusBar",
+]
+
+# 「使用说明」对话框的最小尺寸（宽固定，高随换行后的文字自适应）
+const HELP_DIALOG_WIDTH := Vector2i(680, 0)
 
 # 时间流速选项：[菜单文本, 倍率]
 const TIME_SPEEDS: Array = [
@@ -68,8 +85,12 @@ var sim_unix := 0.0           # 世界 Unix 时间（已含历法锚定与时区
 var world_time_offset := 0.0  # 总偏移秒数 = 时间系统偏差 + 城市时区差 + 历法锚定
 var time_of_day := 0.0        # 当日 0:00 起经过的秒数（显示帧内派生）
 var time_speed := 1.0         # 默认与系统时间同步（m3 批复：1秒过1分钟太吓人）
+var _time_ready := false      # _apply_world_time() 跑过之后 sim_unix 才有意义
 var current_sky: int = SkyKind.SUNNY
 var _last_date_key := ""
+
+var prefs: Dictionary = {}            # 软件偏好（SettingsStore.PREFS_DEFAULTS 骨架）
+var _prefs_save_timer: Timer          # 偏好改动防抖写盘
 
 var city_menu: PopupMenu
 var speed_menu: PopupMenu
@@ -78,6 +99,7 @@ var about_dialog: AcceptDialog
 var month_value_labels := {}  # 语义键 -> 数值 Label
 
 @onready var background: ColorRect = $Background
+@onready var prefs_panel: Window = $Preferences
 @onready var menu_bar: MenuBar = $Margin/Column/TopBar/HBox/MenuBar
 @onready var clock_label: Label = $Margin/Column/TopBar/HBox/Clock
 @onready var high_value: Label = $Margin/Column/Body/StatsPanel/StatsBox/HighRow/HighValue
@@ -94,6 +116,7 @@ var month_value_labels := {}  # 语义键 -> 数值 Label
 
 func _ready() -> void:
 	SettingsStore.ensure_defaults()
+	prefs = SettingsStore.load_preferences()
 	var env_scale := OS.get_environment("FF_TIME_SCALE")
 	if env_scale.is_valid_float():
 		time_speed = maxf(env_scale.to_float(), 0.0)
@@ -103,6 +126,15 @@ func _ready() -> void:
 	background.color = _sky_bg_color()
 	_reload_climates()
 	_apply_world_time()
+	_apply_panel_opacity()
+	# 偏好改动防抖写盘（拖动不透明度滑条时不逐帧写文件）
+	_prefs_save_timer = Timer.new()
+	_prefs_save_timer.one_shot = true
+	_prefs_save_timer.wait_time = 0.5
+	_prefs_save_timer.timeout.connect(_save_prefs)
+	add_child(_prefs_save_timer)
+	prefs_panel.prefs = prefs
+	prefs_panel.preference_changed.connect(_on_preference_changed)
 	# m3 批复小修：启动时容器可能未随字体度量完成重排（面板排开），延迟强制重排
 	await get_tree().process_frame
 	await get_tree().process_frame
@@ -160,6 +192,19 @@ func _apply_world_time() -> void:
 	var ctx := _time_context()
 	world_time_offset = ctx["tz_min"] * 60.0 + ctx["cal_days"] * 86400.0
 	sim_unix = Time.get_unix_time_from_system() + world_time_offset
+	_time_ready = true
+	_last_date_key = ""
+	_sync_date_from_clock()
+	_update_clock()
+
+
+## 城市的时间系统变了（切换城市 / 重新加载）：换算时钟偏移，但保持“同一时刻”——
+## 偏移的差值从 sim_unix 里增减，已经跳过去的天数不会丢。
+func _refresh_time_offset() -> void:
+	var ctx := _time_context()
+	var offset: float = ctx["tz_min"] * 60.0 + ctx["cal_days"] * 86400.0
+	sim_unix += offset - world_time_offset
+	world_time_offset = offset
 	_last_date_key = ""
 	_sync_date_from_clock()
 	_update_clock()
@@ -204,6 +249,7 @@ static func _weekday(year: int, month: int, day: int) -> int:
 
 func _reload_climates() -> void:
 	var kept := climate
+	SettingsStore.invalidate_localization_cache()  # 编辑器是独立进程，可能改过本地化文件
 	climates.clear()
 	var dir := DirAccess.open(DATA_DIR)
 	if dir != null:
@@ -219,10 +265,40 @@ func _reload_climates() -> void:
 		if kept != null and c.source_path == kept.source_path:
 			climate = c
 			break
-	if climate == null and not climates.is_empty():
-		climate = climates[0]
+	if climate == null:
+		climate = _preferred_climate()
 	engine = _build_engine()
+	_remember_last_city()
 	_rebuild_city_menu()
+	if _time_ready:
+		_refresh_time_offset()
+	_refresh_day()
+
+
+func _find_climate(city_id: String) -> ClimateData:
+	for c in climates:
+		if c.city_name == city_id:
+			return c
+	return null
+
+
+## 启动时展示哪座城市：偏好城市 → 上次展示的城市 → 列表第一座（《幻想气象局.md》软件系统设置）。
+func _preferred_climate() -> ClimateData:
+	var want := _find_climate(str(prefs.get("default_city", "")))
+	if want == null:
+		want = _find_climate(str(prefs.get("last_city", "")))
+	if want == null and not climates.is_empty():
+		want = climates[0]
+	return want
+
+
+## 切换当前城市：重建引擎（带世界/城市上下文），并按新城市的时间系统换算时钟。
+func _activate_city(c: ClimateData) -> void:
+	climate = c
+	engine = _build_engine()
+	_remember_last_city()
+	_rebuild_city_menu()
+	_refresh_time_offset()
 	_refresh_day()
 
 
@@ -352,6 +428,7 @@ func _build_menus() -> void:
 	m.add_item("跳到下一日", ID_NEXT_DAY)
 	m.add_item("恢复现在", ID_RESUME_NOW)
 	m.add_item("设置编辑器", ID_EDITOR)
+	m.add_item("偏好设置…", ID_PREFS)
 	m.add_separator()
 	m.add_item("退出", ID_QUIT)
 	m.id_pressed.connect(_on_main_menu)
@@ -391,10 +468,7 @@ func _rebuild_speed_menu() -> void:
 func _on_city_selected(index: int) -> void:
 	if index < 0 or index >= climates.size():
 		return
-	climate = climates[index]
-	engine = WeatherEngine.new(climate)
-	_rebuild_city_menu()
-	_refresh_day()
+	_activate_city(climates[index])
 
 
 func _on_speed_selected(index: int) -> void:
@@ -417,6 +491,8 @@ func _on_main_menu(id: int) -> void:
 			_update_clock()
 		ID_EDITOR:
 			_open_settings_editor()
+		ID_PREFS:
+			_open_preferences()
 		ID_QUIT:
 			get_tree().quit()
 
@@ -456,18 +532,74 @@ func _notification(what: int) -> void:
 
 func _exit_tree() -> void:
 	_kill_editor_process()
+	_save_prefs()  # 防抖窗口内的改动（比如滑条刚拖完就关窗）不丢
 
 
-## 城市显示名：本地化 zh.yaml 优先，缺失回退文件名 capitalize。
+## 城市显示名：按「城市名称语言」读 Localization/<语言>.yaml，缺失回退 zh，再回退文件名。
 func _city_label(id: String) -> String:
-	var n := SettingsStore.city_display_name(id)
+	var n := SettingsStore.city_display_name(id, str(prefs.get("city_name_lang", "zh")))
 	return n if not n.is_empty() else id.capitalize()
+
+
+# —— 偏好设置（非独立窗口：嵌入主窗口的子窗口 scenes/preferences.tscn）——
+
+func _open_preferences() -> void:
+	prefs_panel.open()
+
+
+func _on_preference_changed(key: String) -> void:
+	match key:
+		"default_city":
+			# 选了偏好城市就切过去看——即时反馈；留空则只更新菜单文字
+			var c := _find_climate(str(prefs.get("default_city", "")))
+			if c != null and c != climate:
+				_activate_city(c)
+			else:
+				_rebuild_city_menu()
+			_save_prefs()
+		"city_name_lang":
+			SettingsStore.invalidate_localization_cache()
+			_rebuild_city_menu()
+			_refresh_day()
+			_save_prefs()
+		"panel_opacity":
+			_apply_panel_opacity()
+			_prefs_save_timer.start()
+
+
+## 界面背景不透明度：五个面板的底色 alpha 直接取偏好值（1 = 完全不透明）。
+func _apply_panel_opacity() -> void:
+	var a := clampf(float(prefs.get("panel_opacity", 0.9)), 0.0, 1.0)
+	for path in PANEL_PATHS:
+		var pc: PanelContainer = get_node(path)
+		if not pc.has_meta("base_style"):
+			pc.set_meta("base_style", pc.get_theme_stylebox("panel").duplicate())
+		var sb: StyleBoxFlat = (pc.get_meta("base_style") as StyleBoxFlat).duplicate()
+		sb.bg_color.a = a
+		pc.add_theme_stylebox_override("panel", sb)
+
+
+func _remember_last_city() -> void:
+	var id := climate.city_name if climate != null else ""
+	if str(prefs.get("last_city", "")) != id:
+		prefs["last_city"] = id
+		_save_prefs()
+
+
+func _save_prefs() -> void:
+	if prefs.is_empty():
+		return
+	if _prefs_save_timer != null and not _prefs_save_timer.is_stopped():
+		_prefs_save_timer.stop()
+	var err := SettingsStore.save_preferences(prefs)
+	if err != OK:
+		push_warning("偏好写盘失败（%d）：%s" % [err, SettingsStore.prefs_path()])
 
 
 func _on_help_menu(id: int) -> void:
 	match id:
 		ID_HELP_GUIDE:
-			help_dialog.popup_centered()
+			help_dialog.popup_centered(HELP_DIALOG_WIDTH)
 		ID_HELP_ABOUT:
 			about_dialog.popup_centered()
 
@@ -497,17 +629,19 @@ func _build_dialogs() -> void:
 	about_dialog.dialog_text = "幻想气象局 FictForecast\n\n为幻想世界提供一份可靠的天气预报——用于创作，以及向同好炫耀。\n\n版本 0.0.1classic\n月份数据读取 · 日照加权随机 · 日期种子 · 设置编辑器骨架\n（随机评分筛选尚未实装）"
 	help_dialog = AcceptDialog.new()
 	help_dialog.title = "使用说明"
+	# 说明文字很长：限定 680px 宽并自动换行。对话框嵌在主窗口里，宽过主窗口的话右侧会被裁掉。
+	help_dialog.get_label().autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	help_dialog.dialog_text = """【数据】
 Climate/ 目录下的每个 CSV 视为一座城市。逐行一个月：12 个月值 + 键名（首列或末列均可，自动识别）+ 注释列（可省略）；月份表头行会被自动跳过。
 已支持键名：平均日高温 / 平均日低温 / 平均日均温 / 平均降水量 / 平均日照时长 / 平均湿度 / 气象记录高温 / 气象记录低温 / 平均降水天数 / 平均降雪天数。其他键（如“气候表现-*”）会被原样保留，供未来扩展。
 
 【当前机制】
-· 随机种子来自日期：同一天永远生成同一份天气。
-· 晴/阴/雨按当月（跨月 15 天加权）的平均日照时长加权抽取。
-· 高低温在月均值上叠加确定性扰动，并被当月气象记录钳制。
-· 顶栏“菜单”里可切换城市、调整时间流速、跳到下一日。
+· 随机种子分三层（年/月/日），来自城市所属的世界；同一天永远生成同一份天气。
+· 雨日数量按当月「平均降水天数」锁定；非雨日按日照时长分晴/阴；月降水量与月均温向气候表对账。
+· 高低温在月均值上叠加确定性波动，并被当月气象记录钳制。
+· 顶栏“菜单”里可切换城市、调整时间流速、跳到下一日、恢复现在、打开设置编辑器与偏好设置。
 
 【尚未实装】
-随机评分筛选、天气型惯性（马尔可夫）、气象事件（台风/寒潮）、世界级气象（水晶雨等）、自定义日历。"""
+随机评分筛选、气候现象（台风/寒潮等）、世界级气象（水晶雨等）、自定义历法规则。"""
 	add_child(about_dialog)
 	add_child(help_dialog)

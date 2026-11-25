@@ -100,28 +100,24 @@ func _init() -> void:
 
 	SettingsStore.ensure_defaults()
 	_check(SettingsStore.list_city_ids().size() >= 2, "检测到至少两座城市 CSV")
-	# 世界 JSON 回写测试：按 id 追加/清理，不假设既有条目数（兼容用户数据）
-	var w := SettingsStore.load_world("default")
-	w["base_times"].append({"id": "selftest_only", "offset_minutes": 30})
-	_check(SettingsStore.save_world("default", w) == OK, "保存世界 JSON")
-	var w2 := SettingsStore.load_world("default")
-	var found := false
-	for e in w2.base_times:
-		if str(e.get("id", "")) == "selftest_only":
-			found = true
-	_check(found, "世界 JSON 回读含测试基准时间")
-	var cleaned := []
-	for e in w2.base_times:
-		if str(e.get("id", "")) != "selftest_only":
-			cleaned.append(e)
-	w2["base_times"] = cleaned
-	SettingsStore.save_world("default", w2)
-	var w3 := SettingsStore.load_world("default")
-	var still_there := false
-	for e in w3.base_times:
-		if str(e.get("id", "")) == "selftest_only":
-			still_there = true
-	_check(not still_there, "测试基准时间已清理")
+	# 世界 JSON 回写测试：只写**临时世界文件**，用后即删——自检不得改写用户的真实数据
+	# （m2 起的旧写法是往真实的 default.json 里写再清理，中途失败就会留下残渣）
+	var tw := "__selftest_world__"
+	var tw_path := SettingsStore.WORLDS_DIR.path_join(tw + ".json")
+	_check(not FileAccess.file_exists(tw_path), "测试世界文件事先不存在（否则上次自检中途失败）")
+	var w: Dictionary = SettingsStore.load_world("__no_such_world__")
+	w["seed"] = "selftest"
+	w["base_times"] = [{"id": "selftest_only", "offset_minutes": 30}]
+	w["map"] = MapProjection.normalized({"center_long": 90.0})
+	_check(SettingsStore.save_world(tw, w) == OK, "保存世界 JSON（临时世界）")
+	var w2 := SettingsStore.load_world(tw)
+	_check(w2.base_times.size() == 1 and str(w2.base_times[0].get("id", "")) == "selftest_only",
+			"世界 JSON 回读：基准时间")
+	_check(str(w2["seed"]) == "selftest", "世界 JSON 回读：种子字段")
+	_check(is_equal_approx(float((w2["map"] as Dictionary).get("center_long", 0.0)), 90.0),
+			"map 字段随世界 JSON 往返")
+	DirAccess.remove_absolute(tw_path)
+	_check(not FileAccess.file_exists(tw_path), "测试世界文件已删除")
 	var city := SettingsStore.load_city("myksolonia")
 	_check(city.has("long") and city.has("wallpaper") and city.has("effects"),
 			"城市默认骨架字段齐全")
@@ -202,6 +198,76 @@ func _init() -> void:
 	_check(dt_tz.hour == 7, "时区叠加 +420 分 → 07:00")
 	var dt_cal := WorldRng.display_datetime(0.0, 0, 3000277)
 	_check(dt_cal.year > 10000, "历法锚定 +3000277 天 → 万年历（%d 年）" % dt_cal.year)
+
+	# —— 12. 地图投影（对账《纬度高度计算.py》：画布 2048、±70°）——
+	var mcfg := MapProjection.normalized({"projection": "mercator", "lat_limit": 70.0, "center_long": 0.0})
+	_check(mcfg["projection"] == "mercator" and mcfg["image"] == "", "地图配置补全骨架")
+	_check(not mcfg.is_read_only(), "地图配置可写（常量容器须深拷贝）")
+	_check(absf(MapProjection.mercator_y(70.0) - 1.735415162669) < 1e-9, "墨卡托 y(70°) = 1.735415")
+	# 期望值由《纬度高度计算.py》原式算出：pixel_y = (H/2)·(1 − y/y_max)，H = 2048
+	var ref := {
+		66.57: 95.667211, 45.0: 503.936229, 35.5: 632.481461, 0.0: 1024.0,
+		-30.0: 1348.123878, -66.57: 1952.332789, -70.0: 2048.0, 70.0: 0.0,
+	}
+	for lat in ref:
+		var py := MapProjection.to_uv(float(lat), 0.0, mcfg).y * 2048.0
+		_check(absf(py - float(ref[lat])) < 1e-4,
+				"墨卡托对账 Python 工具：纬度 %.2f° → %.6f（期望 %.6f）" % [float(lat), py, float(ref[lat])])
+	# 往返：Vector2 分量是 32 位浮点，u/v 过一遍有 ~1e-6° 的舍入噪声，
+	# 断言取 1e-4°（≈11 米，远小于城市坐标 0.01° 的取整精度）
+	for lat in [-65.0, -45.5, -12.3, 0.0, 0.7, 33.3, 59.9, 65.0]:
+		for lon in [-180.0, -179.0, -90.0, -0.5, 0.0, 0.5, 121.47, 179.9]:
+			var back := MapProjection.from_uv(MapProjection.to_uv(float(lat), float(lon), mcfg), mcfg)
+			var dlon := MapProjection.wrap_long(back.y - float(lon))
+			_check(absf(back.x - float(lat)) < 1e-4 and absf(dlon) < 1e-4,
+					"墨卡托往返 lat=%.1f lon=%.2f" % [float(lat), float(lon)])
+	var c150 := MapProjection.normalized({"center_long": 150.0})
+	_check(is_equal_approx(MapProjection.to_uv(0.0, 150.0, c150).x, 0.5), "中央经线 150°：150° 落在图片正中")
+	_check(is_equal_approx(MapProjection.to_uv(0.0, 0.0, c150).x, 0.5 - 150.0 / 360.0),
+			"中央经线 150°：0° 经线在 1/12 处")
+	_check(is_equal_approx(MapProjection.to_uv(0.0, 180.0, c150).x, MapProjection.to_uv(0.0, -180.0, c150).x),
+			"±180° 映射到同一处（经度环绕）")
+	_check(is_equal_approx(MapProjection.center_long_for_zero_at(0.25), 90.0), "0° 经线点在 1/4 处 → 中央经线 90°")
+	_check(is_equal_approx(MapProjection.center_long_for_zero_at(0.75), -90.0), "0° 经线点在 3/4 处 → 中央经线 −90°")
+	var ecfg := MapProjection.normalized({"projection": "equirectangular"})
+	_check(MapProjection.to_uv(90.0, 0.0, ecfg).y == 0.0 and MapProjection.to_uv(-90.0, 0.0, ecfg).y == 1.0,
+			"等距圆柱：±90° 铺满图高")
+	_check(is_equal_approx(MapProjection.to_uv(45.0, 0.0, ecfg).y, 0.25), "等距圆柱：45°N 在 1/4 高")
+	_check(absf(MapProjection.lat_limit_from_aspect(2048, 2048) - 85.051129) < 1e-4, "方图 → 纬度上限 ±85.051°")
+	_check(absf(MapProjection.lat_limit_from_aspect(3707, 2048) - 70.0) < 0.01, "3707×2048 → 纬度上限 ≈ ±70°")
+
+	# —— 13. 设置存取：缺键的默认值必须可写且互不共享 ——
+	var wa := SettingsStore.load_world("__no_such_world__")
+	var wb := SettingsStore.load_world("__no_such_world__")
+	_check(not (wa["base_times"] as Array).is_read_only(), "缺键的数组默认值可写")
+	(wa["base_times"] as Array).append({"id": "probe"})
+	_check((wa["base_times"] as Array).size() == 1 and (wb["base_times"] as Array).is_empty(),
+			"默认值深拷贝：两次加载互不共享")
+	var wa_map: Dictionary = wa["map"]
+	wa_map["lat_limit"] = 33.0
+	var wb_map: Dictionary = wb["map"]
+	_check(not wb_map.has("lat_limit") and wa_map.has("lat_limit"), "map 默认值互不共享")
+	_check(SettingsStore.WORLD_DEFAULTS.has("map"), "世界骨架含 map 字段")
+
+	# —— 14. 偏好文件与按语言显示名（临时文件，用后即删）——
+	var pp := "user://ff_selftest_prefs.json"
+	SettingsStore._save_json(pp, {"default_city": "myksolonia", "panel_opacity": 2.0})
+	var pr := SettingsStore._load_json(pp, SettingsStore.PREFS_DEFAULTS)
+	_check(pr["default_city"] == "myksolonia" and pr["last_city"] == ""
+			and typeof(pr["city_name_lang"]) == TYPE_STRING, "偏好加载：文件值与默认骨架合并")
+	_check(is_equal_approx(float(pr["panel_opacity"]), 2.0), "偏好原始值读回（钳制在 load_preferences）")
+	DirAccess.remove_absolute(pp)
+	_check(SettingsStore.city_display_name("myksolonia") == SettingsStore.city_display_name("myksolonia", "zh"),
+			"显示名默认语言 = zh")
+	var tmp_lang_path := SettingsStore.loc_path("__selftest__")
+	SettingsStore.save_localization_file(tmp_lang_path, {"cities": {"myksolonia": "SELFTEST_NAME"}})
+	_check(SettingsStore.city_display_name("myksolonia", "__selftest__") == "SELFTEST_NAME", "按语言读城市名")
+	_check(SettingsStore.city_display_name("lioepprosia", "__selftest__") == SettingsStore.city_display_name("lioepprosia", "zh")
+			and SettingsStore.city_display_name("lioepprosia", "zh") != "", "语言缺条目回退 zh")
+	_check(SettingsStore.city_display_name("myksolonia", "__no_such_lang__")
+			== SettingsStore.city_display_name("myksolonia", "zh"), "语言文件不存在回退 zh")
+	SettingsStore._loc_cache.erase(tmp_lang_path)
+	DirAccess.remove_absolute(tmp_lang_path)
 	_finish()
 
 

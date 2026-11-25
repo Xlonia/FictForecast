@@ -1,0 +1,125 @@
+[gd_scene load_steps=4 format=3]
+
+[ext_resource type="Script" path="res://scripts/preferences_panel.gd" id="1_prefs"]
+[ext_resource type="Theme" path="res://theme/main_theme.tres" id="2_theme"]
+
+[sub_resource type="StyleBoxFlat" id="sb_prefs"]
+content_margin_left = 18.0
+content_margin_top = 14.0
+content_margin_right = 18.0
+content_margin_bottom = 14.0
+bg_color = Color(0.086, 0.114, 0.184, 1)
+corner_radius_top_left = 10
+corner_radius_top_right = 10
+corner_radius_bottom_right = 10
+corner_radius_bottom_left = 10
+
+[node name="Preferences" type="Window"]
+title = "偏好设置"
+size = Vector2i(458, 330)
+visible = false
+unresizable = true
+transient = true
+wrap_controls = true
+theme = ExtResource("2_theme")
+script = ExtResource("1_prefs")
+
+[node name="Panel" type="PanelContainer" parent="."]
+layout_mode = 3
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+theme_override_styles/panel = SubResource("sb_prefs")
+
+[node name="Column" type="VBoxContainer" parent="Panel"]
+custom_minimum_size = Vector2(420, 0)
+layout_mode = 2
+theme_override_constants/separation = 12
+
+[node name="Title" type="Label" parent="Panel/Column"]
+layout_mode = 2
+theme_override_colors/font_color = Color(0.95, 0.97, 1, 1)
+theme_override_font_sizes/font_size = 20
+text = "偏好设置"
+
+[node name="Sep" type="HSeparator" parent="Panel/Column"]
+layout_mode = 2
+
+[node name="CityRow" type="HBoxContainer" parent="Panel/Column"]
+layout_mode = 2
+theme_override_constants/separation = 10
+
+[node name="CityKey" type="Label" parent="Panel/Column/CityRow"]
+custom_minimum_size = Vector2(180, 0)
+layout_mode = 2
+theme_override_colors/font_color = Color(0.62, 0.69, 0.8, 1)
+text = "偏好城市"
+
+[node name="CityPick" type="OptionButton" parent="Panel/Column/CityRow"]
+layout_mode = 2
+size_flags_horizontal = 3
+
+[node name="LangRow" type="HBoxContainer" parent="Panel/Column"]
+layout_mode = 2
+theme_override_constants/separation = 10
+
+[node name="LangKey" type="Label" parent="Panel/Column/LangRow"]
+custom_minimum_size = Vector2(180, 0)
+layout_mode = 2
+theme_override_colors/font_color = Color(0.62, 0.69, 0.8, 1)
+text = "城市名称语言"
+
+[node name="LangPick" type="OptionButton" parent="Panel/Column/LangRow"]
+layout_mode = 2
+size_flags_horizontal = 3
+
+[node name="OpacityRow" type="HBoxContainer" parent="Panel/Column"]
+layout_mode = 2
+theme_override_constants/separation = 10
+
+[node name="OpacityKey" type="Label" parent="Panel/Column/OpacityRow"]
+custom_minimum_size = Vector2(180, 0)
+layout_mode = 2
+theme_override_colors/font_color = Color(0.62, 0.69, 0.8, 1)
+text = "界面背景不透明度"
+
+[node name="OpacitySlider" type="HSlider" parent="Panel/Column/OpacityRow"]
+custom_minimum_size = Vector2(120, 0)
+layout_mode = 2
+size_flags_horizontal = 3
+max_value = 1.0
+step = 0.05
+value = 0.9
+
+[node name="OpacityValue" type="Label" parent="Panel/Column/OpacityRow"]
+custom_minimum_size = Vector2(44, 0)
+layout_mode = 2
+theme_override_colors/font_color = Color(0.85, 0.9, 0.97, 1)
+text = "90%"
+horizontal_alignment = 2
+
+[node name="Hint1" type="Label" parent="Panel/Column"]
+layout_mode = 2
+theme_override_colors/font_color = Color(0.55, 0.62, 0.72, 1)
+theme_override_font_sizes/font_size = 13
+text = "启动时默认展示偏好城市；留空则显示上次查看的城市。"
+
+[node name="Hint2" type="Label" parent="Panel/Column"]
+layout_mode = 2
+theme_override_colors/font_color = Color(0.55, 0.62, 0.72, 1)
+theme_override_font_sizes/font_size = 13
+text = "城市名称语言读取 Localization/<语言>.yaml，缺条目时回退中文。"
+
+[node name="Spacer" type="Control" parent="Panel/Column"]
+layout_mode = 2
+size_flags_vertical = 3
+
+[node name="Buttons" type="HBoxContainer" parent="Panel/Column"]
+layout_mode = 2
+alignment = 2
+
+[node name="CloseBtn" type="Button" parent="Panel/Column/Buttons"]
+layout_mode = 2
+text = "关闭"
