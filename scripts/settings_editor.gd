@@ -239,6 +239,7 @@ func _ready() -> void:
 	_refresh_cities()
 	_select_world(world_ids[0] if not world_ids.is_empty() else "")
 	_select_city(city_ids[0] if not city_ids.is_empty() else "")
+	_refresh_loc_languages()  # m3.8 重写时漏掉：不填的话本地化页的语言下拉是空的，选不了要编辑的 yaml
 	_select_loc_lang("zh" if SettingsStore.list_languages().has("zh") else SettingsStore.list_languages()[0])
 	_fill_phen_picks()
 	_select_phen_world(world_ids[0] if not world_ids.is_empty() else "")
