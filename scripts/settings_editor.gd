@@ -75,6 +75,7 @@ var _form_syncing := false          # 表单回填期间屏蔽控件回写
 
 # —— 城市页 ——
 @onready var city_pick: OptionButton = $Root/Column/Tabs/CityTab/Top/CityPick
+@onready var city_export_btn: Button = $Root/Column/Tabs/CityTab/Top/ExportBtn
 @onready var world_ref_pick: OptionButton = $Root/Column/Tabs/CityTab/Scroll/Form/WorldRow/WorldRefPick
 @onready var name_edit: LineEdit = $Root/Column/Tabs/CityTab/Scroll/Form/NameRow/NameEdit
 @onready var long_spin: SpinBox = $Root/Column/Tabs/CityTab/Scroll/Form/GeoRow/LongSpin
@@ -148,6 +149,7 @@ var _map_drag_offset := Vector2.ZERO
 @onready var loc_value_edit: LineEdit = $Root/Column/Tabs/LocTab/LocAdd/LocValueEdit
 @onready var loc_add_btn: Button = $Root/Column/Tabs/LocTab/LocAdd/LocAddBtn
 var _font_dialog: FileDialog
+var _export_dialog: FileDialog
 
 # —— 世界页参数（m2：波动/现象分布；m2.1 批复隐藏两项超前参数，见下方注释）——
 # [m2.1 隐藏·下版本可能启用] 日照/昼夜模型实装时恢复这两个控件（tscn 中也已注释）
@@ -756,6 +758,7 @@ func _on_world_created() -> void:
 	fresh["map"] = MapProjection.normalized({})  # 新世界文件直接带完整的地图骨架
 	SettingsStore.save_world(id, fresh)
 	_ensure_loc_group("worlds")[id] = id
+	SettingsStore.seed_standard_name("worlds", id)  # 新世界的地名键补进所有标准语言（留空按回退链替补）
 	_refresh_worlds()
 	_select_world(id)
 	new_id_edit.text = ""
@@ -1339,6 +1342,7 @@ func _save_city_tab() -> void:
 	var id := current_city_id
 	if not _save_key("city:" + id):
 		return
+	SettingsStore.seed_standard_name("cities", id)  # 新城市的地名键补进所有标准语言（留空按回退链替补）
 	_save_zh_names_if_dirty()
 	_refresh_cities()
 	_select_city(id)
@@ -2022,6 +2026,18 @@ func _build_map_tab() -> void:
 		loc_font_edit.text = path
 		_on_loc_font_changed(path))  # 赋值不触发 text_changed：手动走一次保存
 	add_child(_font_dialog)
+	# 导出城市（含地名 yaml 等，m3.10 批复：文件层面直接共享）
+	_export_dialog = FileDialog.new()
+	_export_dialog.file_mode = FileDialog.FILE_MODE_OPEN_DIR
+	_export_dialog.access = FileDialog.ACCESS_FILESYSTEM
+	_export_dialog.title = UiText.t("选择导出文件夹")
+	_export_dialog.dir_selected.connect(_on_city_export)
+	add_child(_export_dialog)
+	city_export_btn.pressed.connect(func() -> void:
+		if current_city_id.is_empty():
+			_set_status(UiText.t("请先选择要导出的城市"))
+			return
+		_export_dialog.popup_centered(Vector2i(820, 560)))
 	# 开发辅助：FF_MAP_IMAGE=<图片路径> 启动时自动加载参考图
 	var env_map := OS.get_environment("FF_MAP_IMAGE")
 	if not env_map.is_empty():
@@ -2633,6 +2649,56 @@ func _place_city_at(id: String, uv: Vector2) -> void:
 func _map_config_dirty() -> bool:
 	var snap: Dictionary = _snapshots.get("world:" + current_world_id, {})
 	return not (snap.has("map") and JSON.stringify(_map_cfg()) == JSON.stringify(snap["map"]))
+
+
+# ———————— 导出城市（m3.10 批复：地名 yaml 一并带走，文件层面直接共享）——————
+
+## 把城市打包成可直接分享的文件夹：<目标>/<城市ID>/ 下含
+## Climate（气候表）、Cities（城市设置）、Worlds（引用的世界与现象模板、地图图片）、
+## Localization（全部语言文件：标准预设 + 自定义/虚构）。
+func _on_city_export(dir: String) -> void:
+	var id := current_city_id
+	if id.is_empty():
+		return
+	var root_dir := dir.path_join(id)
+	var ok := true
+	var csv_src := ProjectSettings.globalize_path("res://Climate").path_join(id + ".csv")
+	ok = _copy_file(csv_src, root_dir.path_join("Climate").path_join(id + ".csv")) and ok
+	ok = _copy_file(ProjectSettings.globalize_path(SettingsStore.CITIES_DIR.path_join(id + ".json")),
+			root_dir.path_join("Cities").path_join(id + ".json")) and ok
+	var wid := str(current_city.get("world", ""))
+	if wid != "" and world_ids.has(wid):
+		ok = _copy_file(ProjectSettings.globalize_path(SettingsStore.WORLDS_DIR.path_join(wid + ".json")),
+				root_dir.path_join("Worlds").path_join(wid + ".json")) and ok
+		var phen := SettingsStore.WORLDS_DIR.path_join(wid + ".phenomena.json")
+		if FileAccess.file_exists(phen):
+			ok = _copy_file(ProjectSettings.globalize_path(phen),
+					root_dir.path_join("Worlds").path_join(wid + ".phenomena.json")) and ok
+		# 工程内 Maps/<世界>/ 的参考图（导入复制的图存的是相对路径，必须一起走）
+		var map_dir := ProjectSettings.globalize_path("res://Maps").path_join(wid)
+		if DirAccess.dir_exists_absolute(map_dir):
+			var msrc := DirAccess.open(map_dir)
+			if msrc != null:
+				for f in msrc.get_files():
+					ok = _copy_file(map_dir.path_join(str(f)),
+							root_dir.path_join("Maps").path_join(wid).path_join(str(f))) and ok
+	# 语言文件全带走：标准预设 + 自定义/虚构语言（对方目录里同名文件由用户自行合并/取舍）
+	var loc_dir := ProjectSettings.globalize_path(SettingsStore.LOC_DIR)
+	var lsrc := DirAccess.open(loc_dir)
+	if lsrc != null:
+		for f in lsrc.get_files():
+			if str(f).ends_with(".yaml") or str(f).ends_with(".json"):
+				ok = _copy_file(loc_dir.path_join(str(f)),
+						root_dir.path_join("Localization").path_join(str(f))) and ok
+	if ok:
+		_set_status(UiText.f("城市已导出到：%s（含地名 yaml，整个文件夹拷给对方即可）", [root_dir]))
+	else:
+		_set_status(UiText.f("导出完成但有文件失败，见状态记录：%s", [root_dir]))
+
+
+static func _copy_file(src: String, dst: String) -> bool:
+	DirAccess.make_dir_recursive_absolute(dst.get_base_dir())
+	return DirAccess.copy_absolute(src, dst) == OK
 
 
 # ———————— 工具 ————————

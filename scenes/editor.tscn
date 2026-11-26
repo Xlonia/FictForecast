@@ -222,6 +222,11 @@ layout_mode = 2
 theme_override_colors/font_color = Color(0.55, 0.62, 0.72, 1)
 text = "对应 Climate/<ID>.csv"
 
+[node name="ExportBtn" type="Button" parent="Root/Column/Tabs/CityTab/Top"]
+tooltip_text = "把城市打包成可直接分享的文件夹：气候表、城市设置、引用的世界（含现象模板与地图图片）与全部语言文件（地名 yaml）一并带走"
+layout_mode = 2
+text = "导出城市…"
+
 [node name="Scroll" type="ScrollContainer" parent="Root/Column/Tabs/CityTab"]
 layout_mode = 2
 size_flags_vertical = 3

@@ -361,6 +361,30 @@ func _init() -> void:
 			"偏好骨架：参考图导入默认复制进工程")
 	var lock_pid := SettingsStore.editor_lock_pid()
 	_check(lock_pid == 0 or OS.is_process_running(lock_pid), "编辑器锁读取安全（无残留或进程存活）")
+
+	# —— 18. m3.10 标准语言预设与同类文字回退链 ——
+	for code in ["ko", "de", "ru", "yue", "sr", "hi"]:
+		_check(FileAccess.file_exists(SettingsStore.loc_path(code)),
+				"预设地名 yaml 存在：%s" % code)
+		_check(FileAccess.file_exists(SettingsStore.language_def_path(code)),
+				"预设语言定义存在：%s（名字/字体，现实语言也可配字体）" % code)
+	var ch: Array[String] = SettingsStore.fallback_chain("ko")
+	_check(ch.size() == 4 and ch[0] == "ko" and ch[1] == "zh",
+			"汉字类回退链：ko → zh 优先（实际 %s）" % ", ".join(ch))
+	var cl: Array[String] = SettingsStore.fallback_chain("en")
+	_check(cl.size() == 15 and cl[1] == "de" and cl[13] == "tr" and cl[14] == "zh",
+			"拉丁类回退链按批复顺序 + zh 兜底（%d 项）" % cl.size())
+	var cc: Array[String] = SettingsStore.fallback_chain("uk")
+	_check(cc.size() == 4 and cc[1] == "ru", "西里尔类回退链：优先俄语")
+	_check(SettingsStore.fallback_chain("xni").size() == 2, "自定义/虚构语言只回退 zh（不进类链）")
+	_check(SettingsStore.city_display_name("myksolonia", "ko") == SettingsStore.city_display_name("myksolonia", "zh"),
+			"汉字类留空被汉语替补（ko → %s）" % SettingsStore.city_display_name("myksolonia", "ko"))
+	_check(SettingsStore.city_display_name("myksolonia", "de") == SettingsStore.city_display_name("myksolonia", "en"),
+			"拉丁类留空沿批复顺序替补（de → %s）" % SettingsStore.city_display_name("myksolonia", "de"))
+	_check(SettingsStore.world_display_name("Novera", "fr") == SettingsStore.world_display_name("Novera", "en"),
+			"世界名走同类回退链（fr → %s）" % SettingsStore.world_display_name("Novera", "fr"))
+	_check(SettingsStore.city_display_name("myksolonia", "hi") == SettingsStore.city_display_name("myksolonia", "zh"),
+			"未归类语言（hi）回退 zh")
 	_finish()
 
 

@@ -517,6 +517,7 @@ func _fill_menu_texts() -> void:
 	main_menu.set_item_text(MI_QUIT, UiText.t("退出"))
 	help_menu.set_item_text(0, UiText.t("使用说明"))
 	help_menu.set_item_text(1, UiText.t("关于"))
+	_rebuild_speed_menu()  # m3.8 重写时弄丢的这行：不补上的话时间流速子菜单一直是空的
 
 
 func _rebuild_city_menu() -> void:

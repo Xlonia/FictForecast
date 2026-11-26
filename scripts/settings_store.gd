@@ -73,6 +73,62 @@ const CITY_DEFAULTS := {
 ## 编辑器单实例锁（0.0.1 收官批复）：文件里记 PID；进程死了锁自动作废。
 const EDITOR_LOCK_FILE := "user://editor.lock"
 
+# ———————— 标准现实语言与同类文字回退链（m3.10 批复）——————
+## 防止自设语言代码混乱、互相不能互通：主要现实语言的预设地名 yaml 随程序发布
+## （Localization/<代码>.yaml + <代码>.json），新建城市/世界的地名键自动补进所有标准语言（留空）。
+## 留空的键按**同类文字**回退链替补；虚构/自定义语言不在类里，只回退 zh。
+const SCRIPT_CLASSES := {
+	"hanzi": ["zh", "ja", "ko", "yue"],                     # 汉字类：留空互相替补，优先汉语
+	"latin": ["de", "it", "es", "en", "fr", "pt", "nl",     # 拉丁文类（批复优先顺序）：
+		"pl", "sv", "ro", "id", "vi", "tl", "tr"],
+	"cyrillic": ["ru", "uk", "sr"],                         # 西里尔文类：优先俄语
+}
+# 注：印地语(hi)、乌尔都语(ur) 两种文字体系独立，批复未归类——不在类链里，只回退 zh。
+
+
+## 查名顺序：语言自己 → 同类文字（按批复优先序）→ zh（显示名基准）→ 无（调用方回退 id）。
+static func fallback_chain(lang: String) -> Array[String]:
+	var out: Array[String] = [lang]
+	for cls in SCRIPT_CLASSES:
+		var arr: Array = SCRIPT_CLASSES[cls]
+		if arr.has(lang):
+			for code in arr:
+				if code != lang and not out.has(code):
+					out.append(code)
+			break
+	if not out.has(DEFAULT_LANG):
+		out.append(DEFAULT_LANG)
+	return out
+
+
+## 地名查找（城市/世界显示名）：沿回退链找第一个非空的值；全空返回 ""（调用方自行回退 id）。
+static func _loc_lookup(group: String, key: String, lang: String) -> String:
+	for code in fallback_chain(lang):
+		var res := load_localization_file(loc_path(code))
+		var entries: Dictionary = res.data.get(group, {})
+		var v := str(entries.get(key, ""))
+		if not v.is_empty():
+			return v
+	return ""
+
+
+## 新建城市/世界的地名键：补进所有标准现实语言的 yaml（留空 = 按回退链替补）。
+## zh 不补（实名由调用方写进 zh 表）；幻想/自定义语言不补——不与虚构语言混写。
+## 幂等：已有该键（含空值）的语言文件不动。
+static func seed_standard_name(group: String, key: String) -> void:
+	for cls in SCRIPT_CLASSES:
+		for code in SCRIPT_CLASSES[cls]:
+			if code == DEFAULT_LANG:
+				continue
+			var res := load_localization_file(loc_path(code))
+			var entries: Dictionary = res.data.get(group, {})
+			if entries.has(key):
+				continue
+			if typeof(res.data.get(group, null)) != TYPE_DICTIONARY:
+				res.data[group] = {}
+			(res.data[group] as Dictionary)[key] = ""
+			save_localization_file(loc_path(code), res.data)
+
 ## 语言定义（《幻想气象局.md》「自定义语言」：“一个加载字体的 json”）。文件：Localization/<语言代码>.json。
 const LANG_DEF_DEFAULTS := {
 	"name": "",   # 语言自己的名字（下拉框显示用；留空显示语言代码）
@@ -361,18 +417,6 @@ static func city_display_name(id: String, lang: String = DEFAULT_LANG) -> String
 ## 世界显示名：所选语言的 worlds.<id>，缺失回退 zh，仍缺失返回 ""。
 static func world_display_name(id: String, lang: String = DEFAULT_LANG) -> String:
 	return _loc_lookup("worlds", id, lang)
-
-
-static func _loc_lookup(group: String, key: String, lang: String) -> String:
-	if lang != DEFAULT_LANG:
-		var res := load_localization_file(loc_path(lang))
-		var entries: Dictionary = res.data.get(group, {})
-		var v := str(entries.get(key, ""))
-		if not v.is_empty():
-			return v
-	var base := load_localization()
-	var base_entries: Dictionary = base.data.get(group, {})
-	return str(base_entries.get(key, ""))
 
 
 ## 读 JSON 并与默认骨架合并。文件里缺的键取默认值——**容器类默认值必须深拷贝**：

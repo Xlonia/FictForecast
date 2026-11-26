@@ -1,0 +1,12 @@
+# Svenska 地名预设（瑞典语）
+# 留空的键按同类文字回退链替补：汉字类优先汉语；拉丁类按 德意西英法葡→荷兰→波兰→瑞典→罗马尼亚→印尼→越南→他加禄→土耳其；
+# 西里尔类优先俄语；本语言没填的界面文字回退中文原文。字体在同名 .json 的 font 里配置（现实语言也可配）。
+cities:
+  lioepprosia: ""
+  myksolonia: ""
+
+worlds:
+  Novera: ""
+  default: ""
+
+phenomena:
