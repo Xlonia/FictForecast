@@ -44,8 +44,13 @@ const PREFS_DEFAULTS := {
 	"last_city": "",          # 上次展示的城市 ID（程序自动记录，启动时用它回填）
 	"ui_lang": "zh",          # 界面语言：读 Localization/<语言>.yaml 的 ui 组，缺译文回退中文原文
 	"city_name_lang": "zh",   # 城市名称语言：读 Localization/<语言>.yaml 的 cities 组，缺条目回退 zh
+	"city_sub_lang": "en",    # 城市副标题语言：主名旁边的小字；留空 = 不显示（0.0.1 收官批复：默认英语）
+	"map_import_copy": true,  # 导入参考图时复制到工程 Maps/<世界>/（世界文件夹整体拷走即可分享）
 	"panel_opacity": 0.9,     # 界面背景不透明度 0..1（1 = 完全不透明）
 }
+
+const ANCHOR_LATLONG := "latlong"  # 经纬度为准：图上位置随地图配置移动
+const ANCHOR_MAP := "map"          # 图上位置为准：经纬度由地图配置换算（新城市默认）
 
 const CITY_DEFAULTS := {
 	"world": "",
@@ -57,13 +62,16 @@ const CITY_DEFAULTS := {
 	"calendar": "",  # 引用世界 base_dates 的 id；非法/空 → 公历
 	"wallpaper": {}, # { 系列id: [路径, …] }
 	"effects": {},   # { 系列id: [标识, …] }
-	# 坐标锚定方式（m3.8 批复）：
+	# 坐标锚定方式（m3.8 / 收官批复：新城市默认锚定图上位置——拖到哪就是哪）：
 	#   latlong = 经纬度为准（输入框锁定）——在图上的位置随世界地图配置移动
 	#   map     = 参考图上的位置为准——调整 0° 经线 / 赤道 / 投影时城市不跑位，经纬度由地图配置换算
-	"anchor": "latlong",
+	"anchor": "map",
 	"map_x": 0.0,    # anchor=map：城市在参考图上的归一化位置（0..1，左上为原点）
 	"map_y": 0.0,
 }
+
+## 编辑器单实例锁（0.0.1 收官批复）：文件里记 PID；进程死了锁自动作废。
+const EDITOR_LOCK_FILE := "user://editor.lock"
 
 ## 语言定义（《幻想气象局.md》「自定义语言」：“一个加载字体的 json”）。文件：Localization/<语言代码>.json。
 const LANG_DEF_DEFAULTS := {
@@ -147,11 +155,53 @@ static func save_world(id: String, data: Dictionary) -> Error:
 
 
 static func load_city(id: String) -> Dictionary:
-	return _load_json(CITIES_DIR.path_join(id + ".json"), CITY_DEFAULTS)
+	var path := CITIES_DIR.path_join(id + ".json")
+	var out := _load_json(path, CITY_DEFAULTS)
+	# 迁移：m3.8 之前的城市文件没有 anchor 字段——**旧文件**按“经纬度为准”理解（用户当年填的
+	# 经纬度就是数据本体）；只有**没有文件的新城市**才用新默认（锚定图上位置，收官批复）。
+	if FileAccess.file_exists(path):
+		var f := FileAccess.open(path, FileAccess.READ)
+		var parsed = JSON.parse_string(f.get_as_text()) if f != null else null
+		if typeof(parsed) == TYPE_DICTIONARY and not parsed.has("anchor"):
+			out["anchor"] = ANCHOR_LATLONG
+	return out
 
 
 static func save_city(id: String, data: Dictionary) -> Error:
 	return _save_json(CITIES_DIR.path_join(id + ".json"), data)
+
+
+# ———————— 编辑器单实例锁 ————————
+
+## 还活着的编辑器实例 PID（没有 / 进程已死返回 0）。
+static func editor_lock_pid() -> int:
+	if not FileAccess.file_exists(EDITOR_LOCK_FILE):
+		return 0
+	var f := FileAccess.open(EDITOR_LOCK_FILE, FileAccess.READ)
+	var pid := int(f.get_as_text().strip_edges().to_int()) if f != null else 0
+	if pid <= 0 or not OS.is_process_running(pid):
+		return 0  # 崩溃残留：锁自动作废
+	return pid
+
+
+## 抢锁；已被别的进程持有返回 false（同进程重复实例化——测试场景——放行）。
+static func acquire_editor_lock() -> bool:
+	var pid := editor_lock_pid()
+	if pid == OS.get_process_id():
+		return true
+	if pid > 0:
+		return false
+	var f := FileAccess.open(EDITOR_LOCK_FILE, FileAccess.WRITE)
+	if f == null:
+		return true  # 锁写不了就别挡着人用编辑器
+	f.store_string(str(OS.get_process_id()))
+	return true
+
+
+## 释放自己持有的锁（崩溃后残留的锁由下次启动的 editor_lock_pid 作废）。
+static func release_editor_lock() -> void:
+	if editor_lock_pid() == OS.get_process_id() and FileAccess.file_exists(EDITOR_LOCK_FILE):
+		DirAccess.remove_absolute(EDITOR_LOCK_FILE)
 
 
 ## 气候现象模板（挂在世界上；城市只能被影响，不参与现象的种子——批复口径）。

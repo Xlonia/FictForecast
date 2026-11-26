@@ -15,9 +15,11 @@
 	],
 	"day_hours": 24.0,
 	"map": {
-		"center_long": 33.32,
+		"center_long": 34.22,
 		"image": "D:/Hyomumoene/temp/novera_cviduja - 副本.png",
-		"lat_limit": 70.0,
+		"lat_bottom": -70.0,
+		"lat_top": 70.0,
+		"lon_span": 360.0,
 		"projection": "mercator"
 	},
 	"month_smoothing": 0.5,

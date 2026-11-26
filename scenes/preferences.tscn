@@ -16,7 +16,7 @@ corner_radius_bottom_left = 10
 
 [node name="Preferences" type="Window"]
 title = "偏好设置"
-size = Vector2i(458, 372)
+size = Vector2i(458, 414)
 visible = false
 unresizable = true
 transient = true
@@ -86,6 +86,20 @@ theme_override_colors/font_color = Color(0.62, 0.69, 0.8, 1)
 text = "城市名称语言"
 
 [node name="LangPick" type="OptionButton" parent="Panel/Column/LangRow"]
+layout_mode = 2
+size_flags_horizontal = 3
+
+[node name="SubRow" type="HBoxContainer" parent="Panel/Column"]
+layout_mode = 2
+theme_override_constants/separation = 10
+
+[node name="SubKey" type="Label" parent="Panel/Column/SubRow"]
+custom_minimum_size = Vector2(180, 0)
+layout_mode = 2
+theme_override_colors/font_color = Color(0.62, 0.69, 0.8, 1)
+text = "城市副标题语言"
+
+[node name="SubPick" type="OptionButton" parent="Panel/Column/SubRow"]
 layout_mode = 2
 size_flags_horizontal = 3
 

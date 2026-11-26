@@ -346,6 +346,21 @@ func _init() -> void:
 	SettingsStore._font_cache.clear()
 	DirAccess.remove_absolute(def_path)
 	SettingsStore.invalidate_localization_cache()
+
+	# —— 17. m3.9 收官：城市锚定迁移 / 单实例锁 ——
+	_check(str(SettingsStore.load_city("__no_such_city__").get("anchor", "")) == "map",
+			"新城市（无文件）默认锚定图上位置（收官批复）")
+	var legacy_path := SettingsStore.CITIES_DIR.path_join("__selftest_city__.json")
+	SettingsStore._save_json(legacy_path, {"world": "Novera", "lati": 1.0, "long": 2.0})  # 旧式：无 anchor
+	_check(str(SettingsStore.load_city("__selftest_city__").get("anchor", "")) == "latlong",
+			"旧城市文件缺 anchor → 迁移为经纬度锁定（不挪老城市）")
+	DirAccess.remove_absolute(legacy_path)
+	_check(str(SettingsStore.PREFS_DEFAULTS.get("city_sub_lang", "")) == "en",
+			"偏好骨架：城市副标题语言默认英语")
+	_check(bool(SettingsStore.PREFS_DEFAULTS.get("map_import_copy", false)),
+			"偏好骨架：参考图导入默认复制进工程")
+	var lock_pid := SettingsStore.editor_lock_pid()
+	_check(lock_pid == 0 or OS.is_process_running(lock_pid), "编辑器锁读取安全（无残留或进程存活）")
 	_finish()
 
 

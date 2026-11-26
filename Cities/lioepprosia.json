@@ -1,11 +1,14 @@
 {
-	"alti": 0.0,
+	"alti": 48.0,
+	"anchor": "map",
 	"calendar": "xnidnisia",
 	"effects": {},
-	"lati": 29.38,
-	"long": 120.3,
+	"lati": 31.58,
+	"long": 121.95,
+	"map_x": 0.7437,
+	"map_y": 0.3325,
 	"times": "hmt",
-	"timez": 420,
+	"timez": 420.0,
 	"wallpaper": {},
 	"world": "Novera"
 }

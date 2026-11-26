@@ -12,6 +12,7 @@ var prefs: Dictionary = {}  # 主界面传入的偏好字典（引用）
 @onready var city_pick: OptionButton = $Panel/Column/CityRow/CityPick
 @onready var ui_pick: OptionButton = $Panel/Column/UiRow/UiPick
 @onready var lang_pick: OptionButton = $Panel/Column/LangRow/LangPick
+@onready var sub_pick: OptionButton = $Panel/Column/SubRow/SubPick
 @onready var opacity_slider: HSlider = $Panel/Column/OpacityRow/OpacitySlider
 @onready var opacity_value: Label = $Panel/Column/OpacityRow/OpacityValue
 @onready var close_btn: Button = $Panel/Column/Buttons/CloseBtn
@@ -22,6 +23,7 @@ func _ready() -> void:
 	city_pick.item_selected.connect(_on_city_picked)
 	ui_pick.item_selected.connect(_on_ui_picked)
 	lang_pick.item_selected.connect(_on_lang_picked)
+	sub_pick.item_selected.connect(_on_sub_picked)
 	opacity_slider.value_changed.connect(_on_opacity_changed)
 
 
@@ -52,6 +54,7 @@ func _sync() -> void:
 
 	_fill_lang_pick(ui_pick, str(prefs.get("ui_lang", "zh")))
 	_fill_lang_pick(lang_pick, name_lang)
+	_fill_sub_pick(str(prefs.get("city_sub_lang", "en")))
 
 	opacity_slider.set_value_no_signal(float(prefs.get("panel_opacity", 0.9)))
 	_show_opacity()
@@ -70,6 +73,22 @@ func _fill_lang_pick(pick: OptionButton, current_lang: String) -> void:
 		pick.add_item(UiText.f("%s（%s）", [disp, lang]) if disp != lang else lang, 0)
 		pick.set_item_metadata(pick.item_count - 1, lang)
 	_select(pick, current_lang)
+
+
+## 副标题语言下拉框：首项“不显示”（留空），其余为语言。
+func _fill_sub_pick(current_lang: String) -> void:
+	sub_pick.clear()
+	sub_pick.add_item(UiText.t("（不显示）"), 0)
+	sub_pick.set_item_metadata(0, "")
+	var langs := SettingsStore.list_languages()
+	if not current_lang.is_empty() and not langs.has(current_lang):
+		langs.append(current_lang)
+	langs.sort()
+	for lang in langs:
+		var disp := SettingsStore.language_display_name(lang)
+		sub_pick.add_item(UiText.f("%s（%s）", [disp, lang]) if disp != lang else lang, 0)
+		sub_pick.set_item_metadata(sub_pick.item_count - 1, lang)
+	_select(sub_pick, current_lang)
 
 
 func _select(pick: OptionButton, meta: String) -> void:
@@ -108,6 +127,11 @@ func _on_lang_picked(index: int) -> void:
 	prefs["city_name_lang"] = str(lang_pick.get_item_metadata(index))
 	preference_changed.emit("city_name_lang")
 	_sync()  # 偏好城市下拉框里的名字要换成新语言
+
+
+func _on_sub_picked(index: int) -> void:
+	prefs["city_sub_lang"] = str(sub_pick.get_item_metadata(index))
+	preference_changed.emit("city_sub_lang")
 
 
 func _on_opacity_changed(v: float) -> void:

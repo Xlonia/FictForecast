@@ -20,6 +20,7 @@ const ID_NEXT_DAY := 101
 const ID_EDITOR := 103
 const ID_RESUME_NOW := 104
 const ID_PREFS := 105
+const ID_CALENDAR := 106
 const ID_QUIT := 102
 const ID_HELP_GUIDE := 200
 const ID_HELP_ABOUT := 201
@@ -34,9 +35,10 @@ const MI_SPEED := 1
 const MI_RELOAD := 2
 const MI_NEXT_DAY := 3
 const MI_RESUME := 4
-const MI_EDITOR := 5
-const MI_PREFS := 6
-const MI_QUIT := 8
+const MI_CALENDAR := 5
+const MI_EDITOR := 6
+const MI_PREFS := 7
+const MI_QUIT := 9
 
 # 「界面背景不透明度」作用的五个面板
 const PANEL_PATHS := [
@@ -146,6 +148,7 @@ var editor_process_pid: int = 0
 
 @onready var background: ColorRect = $Background
 @onready var prefs_panel: Window = $Preferences
+@onready var calendar_panel: Window = $Calendar
 @onready var menu_bar: MenuBar = $Margin/Column/TopBar/HBox/MenuBar
 @onready var clock_label: Label = $Margin/Column/TopBar/HBox/Clock
 @onready var high_value: Label = $Margin/Column/Body/StatsPanel/StatsBox/HighRow/HighValue
@@ -188,6 +191,10 @@ func _ready() -> void:
 	add_child(_prefs_save_timer)
 	prefs_panel.prefs = prefs
 	prefs_panel.preference_changed.connect(_on_preference_changed)
+	calendar_panel.date_picked.connect(_on_calendar_day_picked)
+	calendar_panel.now_requested.connect(func() -> void:
+		_apply_world_time()
+		_update_clock())
 	# m3 批复小修：启动时容器可能未随字体度量完成重排（面板排开），延迟强制重排
 	await get_tree().process_frame
 	await get_tree().process_frame
@@ -479,6 +486,7 @@ func _build_menus() -> void:
 	main_menu.add_item("", ID_RELOAD)
 	main_menu.add_item("", ID_NEXT_DAY)
 	main_menu.add_item("", ID_RESUME_NOW)
+	main_menu.add_item("", ID_CALENDAR)
 	main_menu.add_item("", ID_EDITOR)
 	main_menu.add_item("", ID_PREFS)
 	main_menu.add_separator()
@@ -503,6 +511,7 @@ func _fill_menu_texts() -> void:
 	main_menu.set_item_text(MI_RELOAD, UiText.t("重新加载气候数据"))
 	main_menu.set_item_text(MI_NEXT_DAY, UiText.t("跳到下一日"))
 	main_menu.set_item_text(MI_RESUME, UiText.t("恢复现在"))
+	main_menu.set_item_text(MI_CALENDAR, UiText.t("日历…"))
 	main_menu.set_item_text(MI_EDITOR, UiText.t("设置编辑器"))
 	main_menu.set_item_text(MI_PREFS, UiText.t("偏好设置…"))
 	main_menu.set_item_text(MI_QUIT, UiText.t("退出"))
@@ -556,6 +565,8 @@ func _on_main_menu(id: int) -> void:
 		ID_RESUME_NOW:
 			_apply_world_time()
 			_update_clock()
+		ID_CALENDAR:
+			calendar_panel.open(sim_date.duplicate())
 		ID_EDITOR:
 			_open_settings_editor()
 		ID_PREFS:
@@ -642,15 +653,42 @@ func _exit_tree() -> void:
 
 
 ## 城市显示名：按「城市名称语言」读 Localization/<语言>.yaml，缺失回退 zh，再回退文件名。
+## 「城市副标题语言」留空以外时在主名后面补小字副名（同名 / 同语言 / 缺译文时不补）。
 func _city_label(id: String) -> String:
 	var n := SettingsStore.city_display_name(id, str(prefs.get("city_name_lang", "zh")))
-	return n if not n.is_empty() else id.capitalize()
+	if n.is_empty():
+		n = id.capitalize()
+	var sub := _city_sub_label(id, n)
+	return n if sub.is_empty() else "%s %s" % [n, sub]
+
+
+func _city_sub_label(id: String, main_name: String) -> String:
+	var lang := str(prefs.get("city_sub_lang", "en"))
+	if lang.is_empty() or lang == str(prefs.get("city_name_lang", "zh")):
+		return ""
+	var s := SettingsStore.city_display_name(id, lang)
+	return s if not s.is_empty() and s != main_name else ""
 
 
 # —— 偏好设置（非独立窗口：嵌入主窗口的子窗口 scenes/preferences.tscn）——
 
 func _open_preferences() -> void:
 	prefs_panel.open()
+
+
+## 日历跳转：换算目标日期与现实锚定日期的秒差加到世界时钟上——当日的时刻（几点几分）保持不变。
+func _on_calendar_day_picked(year: int, month: int, day: int) -> void:
+	var cur := Time.get_unix_time_from_datetime_dict({
+		"year": int(sim_date.year), "month": int(sim_date.month), "day": int(sim_date.day),
+		"hour": 0, "minute": 0, "second": 0,
+	})
+	var tgt := Time.get_unix_time_from_datetime_dict({
+		"year": year, "month": month, "day": day,
+		"hour": 0, "minute": 0, "second": 0,
+	})
+	sim_unix += float(tgt - cur)
+	_sync_date_from_clock()
+	_update_clock()
 
 
 func _on_preference_changed(key: String) -> void:
@@ -670,6 +708,11 @@ func _on_preference_changed(key: String) -> void:
 		"city_name_lang":
 			SettingsStore.invalidate_localization_cache()
 			_apply_name_fonts()
+			_rebuild_city_menu()
+			_refresh_day()
+			_save_prefs()
+		"city_sub_lang":
+			SettingsStore.invalidate_localization_cache()
 			_rebuild_city_menu()
 			_refresh_day()
 			_save_prefs()

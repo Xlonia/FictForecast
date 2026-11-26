@@ -4,6 +4,7 @@
 [ext_resource type="Script" path="res://scripts/weather_icon.gd" id="2_icon"]
 [ext_resource type="Theme" path="res://theme/main_theme.tres" id="3_theme"]
 [ext_resource type="PackedScene" path="res://scenes/preferences.tscn" id="4_prefs"]
+[ext_resource type="PackedScene" path="res://scenes/calendar.tscn" id="5_cal"]
 
 [sub_resource type="StyleBoxFlat" id="sb_panel"]
 content_margin_left = 18.0
@@ -253,3 +254,5 @@ text = "正在启动…"
 autowrap_mode = 3
 
 [node name="Preferences" parent="." instance=ExtResource("4_prefs")]
+
+[node name="Calendar" parent="." instance=ExtResource("5_cal")]

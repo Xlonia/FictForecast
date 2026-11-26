@@ -93,6 +93,7 @@ var _form_syncing := false          # 表单回填期间屏蔽控件回写
 @onready var map_world_pick: OptionButton = $Root/Column/Tabs/MapTab/MapTop/MapWorldPick
 @onready var map_city_pick: OptionButton = $Root/Column/Tabs/MapTab/MapTop/MapCityPick
 @onready var map_load_btn: Button = $Root/Column/Tabs/MapTab/MapTop/MapLoadBtn
+@onready var map_import_check: CheckBox = $Root/Column/Tabs/MapTab/MapTop/MapImportCheck
 @onready var map_proj_pick: OptionButton = $Root/Column/Tabs/MapTab/MapCfg/MapProjPick
 @onready var map_lat_top_spin: SpinBox = $Root/Column/Tabs/MapTab/MapCfg/MapLatTopSpin
 @onready var map_lat_bottom_spin: SpinBox = $Root/Column/Tabs/MapTab/MapCfg/MapLatBottomSpin
@@ -108,6 +109,9 @@ var _form_syncing := false          # 表单回填期间屏蔽控件回写
 var map_texture: Texture2D = null
 var map_city_id := ""
 var _map_tex_path := ""      # 已加载的参考图路径（路径没变就不重复读盘）
+var _map_import_copy := true # 导入参考图时复制到工程 Maps/<世界>/（软件偏好，分享包友好）
+var _lock_owned := false     # 单实例锁归本进程持有（退出时释放）
+var _lock_dialog: AcceptDialog
 var _map_cities := {}        # 当前世界下的城市：id → 磁盘数据（_refresh_map_cities 时刷新）
 var _map_syncing := false    # 控件回填期间屏蔽 value_changed 回写
 var _map_dialog: FileDialog
@@ -191,6 +195,23 @@ var phen_index := -1
 
 func _ready() -> void:
 	SettingsStore.ensure_defaults()
+	# 单实例锁（0.0.1 收官批复）：已有别的编辑器进程在跑 → 提示后退出
+	if not SettingsStore.acquire_editor_lock():
+		_lock_owned = false
+		get_window().title = UiText.t("设置编辑器 · 幻想气象局")
+		_lock_dialog = AcceptDialog.new()
+		_lock_dialog.title = UiText.t("设置编辑器")
+		_lock_dialog.dialog_text = UiText.t("设置编辑器已在运行（独立窗口）")
+		_lock_dialog.ok_button_text = UiText.t("确定")
+		_lock_dialog.confirmed.connect(func() -> void: get_tree().quit(0))
+		add_child(_lock_dialog)
+		_lock_dialog.popup_centered.call_deferred()
+		var auto_quit := get_tree().create_timer(10.0)
+		auto_quit.timeout.connect(func() -> void:
+			if is_instance_valid(_lock_dialog):
+				get_tree().quit(0))
+		return
+	_lock_owned = true
 	# 界面语言跟随软件偏好：先登记场景里的静态文字（必须早于任何代码改写它们），再换成当前语言
 	_prefs_ui_lang = str(SettingsStore.load_preferences().get("ui_lang", "zh"))
 	UiText.set_language(_prefs_ui_lang)
@@ -1515,6 +1536,11 @@ func _clear_all_drafts() -> void:
 
 # ———————— 界面语言 ————————
 
+func _exit_tree() -> void:
+	if _lock_owned:
+		SettingsStore.release_editor_lock()
+
+
 func _notification(what: int) -> void:
 	if what == NOTIFICATION_APPLICATION_FOCUS_IN:
 		_sync_ui_language_from_disk()
@@ -1976,6 +2002,8 @@ func _map_period() -> float:
 func _build_map_tab() -> void:
 	_fill_map_projection_pick()
 	_sync_map_controls()
+	_map_import_copy = bool(SettingsStore.load_preferences().get("map_import_copy", true))
+	map_import_check.set_pressed_no_signal(_map_import_copy)
 	_map_dialog = FileDialog.new()
 	_map_dialog.file_mode = FileDialog.FILE_MODE_OPEN_FILE  # 选已有的图片（默认是保存模式，按钮会变成 Save）
 	_map_dialog.access = FileDialog.ACCESS_FILESYSTEM
@@ -1984,6 +2012,7 @@ func _build_map_tab() -> void:
 			UiText.t("*.jpg ; JPEG 图片"), UiText.t("*.webp ; WebP 图片")])
 	_map_dialog.file_selected.connect(_on_map_file)
 	add_child(_map_dialog)
+	map_import_check.toggled.connect(_on_map_import_toggled)
 	_font_dialog = FileDialog.new()
 	_font_dialog.file_mode = FileDialog.FILE_MODE_OPEN_FILE
 	_font_dialog.access = FileDialog.ACCESS_FILESYSTEM
@@ -2078,7 +2107,9 @@ func _load_map_texture(path: String) -> void:
 	map_texture = null
 	if path.is_empty():
 		return
-	var img := Image.load_from_file(path)
+	# res:// 相对路径（导入复制的图）也能加载
+	var abs_path := ProjectSettings.globalize_path(path) if not path.is_absolute_path() else path
+	var img := Image.load_from_file(abs_path)
 	if img == null or img.is_empty():
 		_set_status(UiText.f("参考图加载失败：%s", [path]))
 		return
@@ -2123,6 +2154,14 @@ func _on_map_load() -> void:
 	_map_dialog.popup_centered(Vector2i(820, 560))
 
 
+## 「导入时复制到工程」：偏好持久化（随改随存）。
+func _on_map_import_toggled(pressed: bool) -> void:
+	_map_import_copy = pressed
+	var p := SettingsStore.load_preferences()
+	p["map_import_copy"] = pressed
+	SettingsStore.save_preferences(p)
+
+
 func _on_map_file(path: String) -> void:
 	if current_world_id.is_empty():
 		_set_status(UiText.t("请先选择世界——参考图挂在世界上"))
@@ -2131,7 +2170,19 @@ func _on_map_file(path: String) -> void:
 	if img == null or img.is_empty():
 		_set_status(UiText.f("参考图加载失败：%s", [path]))
 		return
-	_map_cfg()["image"] = path
+	# 导入设置（收官批复）：复制一份进工程 Maps/<世界ID>/，存相对路径——世界文件夹整体拷走即可分享
+	var stored := path
+	if _map_import_copy:
+		var dir := ProjectSettings.globalize_path("res://Maps").path_join(current_world_id)
+		DirAccess.make_dir_recursive_absolute(dir)
+		var dst := dir.path_join(path.get_file())
+		if path == dst:
+			stored = path  # 选的本来就是工程里的这份
+		elif DirAccess.copy_absolute(path, dst) == OK:
+			stored = "res://Maps/%s/%s" % [current_world_id, path.get_file()]
+		else:
+			_set_status(UiText.t("参考图复制到工程失败，改用原路径"))
+	_map_cfg()["image"] = stored
 	_reset_map_view()
 	_sync_map_controls()
 	_set_status(UiText.f("参考图已加载（%d×%d）——点击或拖动给选中城市定点；图片路径与经纬范围用「保存当前页」落盘", [
