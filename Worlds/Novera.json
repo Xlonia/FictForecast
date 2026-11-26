@@ -10,10 +10,16 @@
 	"base_times": [
 		{
 			"id": "hmt",
-			"offset_minutes": 0
+			"offset_minutes": 0.0
 		}
 	],
 	"day_hours": 24.0,
+	"map": {
+		"center_long": 33.32,
+		"image": "D:/Hyomumoene/temp/novera_cviduja - 副本.png",
+		"lat_limit": 70.0,
+		"projection": "mercator"
+	},
 	"month_smoothing": 0.5,
 	"month_temp_sigma": 2.2,
 	"monthly_total_strength": 0.0,

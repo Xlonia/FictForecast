@@ -1,0 +1,305 @@
+cities:
+  lioepprosia: Luoyuan
+  myksolonia: Guiliu
+
+worlds:
+  default: Real world
+  Novera: Novera
+
+phenomena:
+  subtropical_high: Subtropical high (example)
+  meiyu_front: Meiyu quasi-stationary front (example)
+
+ui:
+  %.1f 天: %.1f days
+  %.1f 小时: %.1f h
+  %04d年%02d月%02d日 %s  %02d:%02d:%02d: %04d-%02d-%02d %s  %02d:%02d:%02d
+  %d 月气候背景: Climate normals · month %d
+  *.jpg ; JPEG 图片: *.jpg ; JPEG images
+  *.otf ; OpenType 字体: *.otf ; OpenType fonts
+  *.png ; PNG 图片: *.png ; PNG images
+  *.ttf ; TrueType 字体: *.ttf ; TrueType fonts
+  *.webp ; WebP 图片: *.webp ; WebP images
+  0° 赤道: 0° Equator
+  1×（与真实时间同步）: 1× (synced with real time)
+  3600×（1 秒 = 1 小时）: 3600× (1 s = 1 hour)
+  600×（1 秒 = 10 分钟）: 600× (1 s = 10 min)
+  60×（1 秒 = 1 分钟）: 60× (1 s = 1 min)
+  Climate/ 目录下的每个 CSV 视为一座城市。逐行一个月：12 个月值 + 键名（首列或末列均可，自动识别）+ 注释列（可省略）；月份表头行会被自动跳过。: Each CSV under Climate/ is one city. One row per month: 12 monthly values + a key (first or last column, auto-detected) + an optional comment column; a month-header row is skipped automatically.
+  ID 不能包含斜杠、冒号或句点: ID cannot contain slashes, colons or dots
+  res://Localization/<语言>.yaml —— 每个语言一个文件；分组 → 键 → 值（受限 YAML 子集）。ui 组是界面译文：键 = 中文原文: res://Localization/<lang>.yaml — one file per language; group → key → value (restricted YAML subset). The ui group holds UI translations: keys are the Chinese originals.
+  · 另有 %d 个未映射键已原样保留: · %d unmapped key(s) kept as-is
+  · 跳过 %d 行: · %d row(s) skipped
+  · 随机种子分三层（年/月/日），来自城市所属的世界；同一天永远生成同一份天气。: · Randomness is seeded in three tiers (year/month/day) from the city's world; the same day always yields the same weather.
+  · 雨日数量按当月「平均降水天数」锁定；非雨日按日照时长分晴/阴；月降水量与月均温向气候表对账（强度见世界设置）。: · Rain days are locked to the month's avg rain days; other days split sunny/cloudy by sunshine; monthly precipitation and mean temperature reconcile toward the climate table (strength in world settings).
+  · 顶栏“菜单”里可切换城市、调整时间流速、跳到下一日、恢复现在、打开设置编辑器与偏好设置。: · The Menu at the top switches cities, adjusts time speed, jumps to the next day, resumes now, and opens the settings editor and preferences.
+  · 高低温在月均值上叠加确定性波动，并被当月气象记录钳制。: · High/low temperatures add deterministic variation on the monthly means, clamped by the month's records.
+  ●　有 %d 处未保存改动（关闭时会询问处理）: ●  %d unsaved change(s) (you will be asked on close)
+  【尚未实装】: [Not yet implemented]
+  【当前机制】: [How it works now]
+  【数据】: [Data]
+  上下裁剪不对称的图：在参考图上点击赤道所在的一行，自动换算上下缘纬度（比例尺不变）: For maps cropped asymmetrically: click the row where the equator runs to derive top/bottom latitudes (scale preserved).
+  上次编辑器没有正常保存就关闭了，留下 %d 份未保存的草稿：: The editor closed without saving last time; %d unsaved draft(s) remain:
+  上缘纬度: Top latitude
+  下缘纬度: Bottom latitude
+  不保存退出: Exit without saving
+  世界: Worlds
+  世界 %s: World %s
+  世界 %s 已存在: World %s already exists
+  中央经线: Central meridian
+  中文是界面原文，不需要导入: Chinese is the UI source language; nothing to import
+  为幻想世界提供一份可靠的天气预报——用于创作，以及向同好炫耀。: A dependable weather forecast for your fictional worlds — for creation, and for showing off to fellow hobbyists.
+  云层增厚，阳光时隐时现: Thickening clouds; sun comes and goes
+  云量 Δ cloud: Cloud cover Δ cloud
+  互斥 exclusive: Mutually exclusive
+  今日预报: Today
+  仍要退出: Quit anyway
+  任意 any: Anywhere (any)
+  低温: Low
+  低温降水，落地成雪: Cold precipitation settling as snow
+  作用形状 shape: Footprint shape
+  使用说明: Guide
+  促进 ally: Triggers (ally)
+  保存全部: Save all
+  保存全部并退出: Save all and exit
+  保存失败（%d）：%s: Save failed (%d): %s
+  保存当前页: Save tab
+  保留草稿: Keep drafts
+  值: Value
+  偏好城市: Preferred city
+  偏好设置: Preferences
+  偏好设置…: Preferences…
+  偏差分钟: offset (min)
+  先选择世界并点「加载参考图…」（图片挂在世界上）: Pick a world and click “Load reference map…” first (the image belongs to the world).
+  公历: Gregorian
+  关于: About
+  关于 · 幻想气象局: About · FictForecast
+  关闭: Close
+  写入失败（%d）: Write failed (%d)
+  分钟: min
+  创建: Create
+  创建世界: New world
+  创建语言: New language
+  删除: Delete
+  加载参考图…: Load reference map…
+  历法 calendar: Calendar
+  参考图加载失败：%s: Failed to load reference map: %s
+  参考图已加载（%d×%d）——点击或拖动给选中城市定点；图片路径与经纬范围用「保存当前页」落盘: Reference map loaded (%d×%d) — click or drag to place the selected city; image path and lat/lon range are written by “Save tab”.
+  参考图挂在当前世界上。加载后可给城市定点、标定 0° 经线与赤道: The reference map belongs to the current world. Once loaded you can place cities and mark the 0° meridian and the equator.
+  取消: Cancel
+  名称 name（本地化 zh）: Name (zh localization)
+  启动时默认展示偏好城市；留空则显示上次查看的城市。: Show the preferred city on startup; leave empty to show the last viewed city.
+  周一: Mon
+  周三: Wed
+  周二: Tue
+  周五: Fri
+  周六: Sat
+  周四: Thu
+  周日: Sun
+  图片宽度覆盖多少度经度。不足 360° 时其余经度是空位：在图上拖动即可看到: How many degrees of longitude the image spans. Below 360° the rest is blank: drag the view to see it.
+  图片覆盖经度: Longitude span
+  在参考图上点击 0° 经线所在的一列，自动换算中央经线: Click the column where the 0° meridian runs to derive the central meridian.
+  地图: Map
+  地图配置写盘失败: Failed to write map settings
+  地图配置已一并保存: Map settings saved along with it
+  城市: Cities
+  城市 %s: City %s
+  城市名称与界面文字读取 Localization/<语言>.yaml，缺条目时回退中文。: City names and UI text read Localization/<lang>.yaml; missing entries fall back to Chinese.
+  城市名称语言: City-name language
+  城市：%s（%.1f°, %.1f°, %.0fm · 世界 %s · 历法 %s · 时间系统 %s · 时区 %+d 分）　·　数据：%s　·　机制：三层种子 + 月度确定性生成（雨日锁定/降水对账/距平零和/露点中介）%s%s: City: %s (%.1f°, %.1f°, %.0fm · World %s · Calendar %s · Time system %s · UTC%+d min)  ·  Data: %s  ·  Mechanism: three-tier seeds + monthly deterministic generation (rain-day locking / precipitation reconcile / zero-sum anomalies / dew-point mediation)%s%s
+  基准日期 base_dates —— 与现实日期差（天）；城市 calendar 引用其 id，非法/留空 → 公历: Base dates — day offset from the real date; a city's calendar references its id; invalid/empty → Gregorian.
+  基准时间 base_times —— 时区偏差（分钟），会投射到世界 0° 经度；城市 times 引用其 id，非法/留空 → UTC: Base times — timezone offset in minutes, projected onto the world's 0° meridian; a city's times references its id; invalid/empty → UTC.
+  墨卡托 mercator: Mercator
+  壁纸系列 wallpaper —— {id → [路径…]}；日后在天气表格中引用 id: Wallpaper sets wallpaper — {id → [paths…]}; the weather table will reference ids later.
+  壁纸路径，逗号分隔: Wallpaper paths, comma-separated
+  复位视图: Reset view
+  天: d
+  字体 font（留空 = 不覆盖）: Font (empty = keep default)
+  字体文件路径，如 fictlanguages/fonts/xxx.ttf: Font file path, e.g. fictlanguages/fonts/xxx.ttf
+  字体预览：0123 ABC 洛沅: Font preview: 0123 ABC Luoyuan
+  季节窗口（月）: Season window (months)
+  它们已按原样载入（仍标记为未保存）。要保留吗？: They are loaded as-is (still marked unsaved). Keep them?
+  对应 Climate/<ID>.csv: Backed by Climate/<ID>.csv
+  对方现象ID，逗号分隔: Other phenomenon IDs, comma-separated
+  导入界面字符串: Import UI strings
+  差天数: offset (days)
+  已保存 Cities/%s.json 与本地化: Saved Cities/%s.json and localization
+  已保存 Worlds/%s.json 与本地化: Saved Worlds/%s.json and localization
+  已保存 Worlds/%s.phenomena.json 与本地化: Saved Worlds/%s.phenomena.json and localization
+  已保存 res://Localization/%s.yaml: Saved res://Localization/%s.yaml
+  已保存全部改动: All changes saved
+  已创建 Worlds/%s.json（尚未保存本地化改名）: Created Worlds/%s.json (localization name not saved yet)
+  已创建现象 %s（记得保存）: Created phenomenon %s (remember to save)
+  已创建语言 %s（记得保存）: Created language %s (remember to save)
+  已启动设置编辑器（独立窗口）: Settings editor started (separate window)
+  已导入 %d 条界面字符串（键 = 中文原文；留空 = 显示中文）: Imported %d UI strings (keys = Chinese originals; empty = show Chinese).
+  已将 %s 定位到图上（换算：纬度 %.2f°、经度 %.2f°）: Placed %s on the map (converted: lat %.2f°, lon %.2f°).
+  已恢复 %d 份草稿（仍是未保存状态，可继续编辑或用「放弃本页改动」丢弃）: Restored %d draft(s) (still unsaved; keep editing or discard with “Revert tab”).
+  已把该位置设为 0° 经线：中央经线 = %.2f°（记得保存）: Set that column as the 0° meridian: central meridian = %.2f° (remember to save).
+  已把该行设为赤道：上缘 %.2f°、下缘 %.2f°（记得保存）: Set that row as the equator: top %.2f°, bottom %.2f° (remember to save).
+  已支持键名：平均日高温 / 平均日低温 / 平均日均温 / 平均降水量 / 平均日照时长 / 平均湿度 / 气象记录高温 / 气象记录低温 / 平均降水天数 / 平均降雪天数。其他键（如“气候表现-*”）会被原样保留，供未来扩展。: Supported keys: avg daily high / avg daily low / avg daily mean / avg precipitation / avg sunshine / avg humidity / record high / record low / avg rain days / avg snow days. Other keys (such as “气候表现-*”) are kept as-is for future use.
+  已改回图上位置：调整 0° 经线、赤道或投影时城市不跑位，经纬度随之换算: Switched to map position: adjusting the 0° meridian, equator or projection keeps the city in place; lat/long are converted accordingly.
+  已放弃上次的草稿: Discarded last session's drafts
+  已放弃本页的改动: Reverted this tab's changes
+  已锁定经纬度：以输入框为准，城市在图上的位置随世界地图配置移动: Lat/long locked: the entered values are authoritative; the city follows the world map settings on the image.
+  帮助: Help
+  平均日低温: Avg daily low
+  平均日照时长: Avg sunshine
+  平均日高温: Avg daily high
+  平均湿度: Avg humidity
+  平均降水天数: Avg rain days
+  平均降水量: Avg precipitation
+  平均降雪天数: Avg snow days
+  平移与缩放复位（也可以在图上双击）: Reset pan & zoom (double-click the map works too)
+  年度补偿强度 annual_compensation: Annual compensation annual_compensation
+  幻想气象局 FictForecast: 幻想气象局 FictForecast
+  开启：以输入框里的经纬度为准，城市在图上的位置随世界地图配置移动；关闭：以城市在参考图上的位置为准，经纬度随地图配置换算: On: the entered lat/long are authoritative; the city moves with the world map settings. Off: the position on the reference map is authoritative; lat/long follow the map settings.
+  强度: Strength
+  恢复未保存的草稿: Restore unsaved drafts
+  恢复现在: Resume now
+  所属世界 world: World
+  把当前页正在编辑的文档恢复成已保存的状态（未保存的改动丢弃）: Restore this tab's document to its saved state (unsaved changes are dropped).
+  把界面语言（软件偏好）设为当前语言，主界面与编辑器都随之切换: Set the UI language (a preference) to the current language; the main window and this editor follow.
+  把程序里全部界面中文原文加进 ui 组（键 = 中文原文），填上译文即可: Add every UI Chinese original to the ui group (keys = Chinese originals); just fill in the translations.
+  把逐月气候 CSV 放进 Climate/ 目录，再从菜单重新加载: Put monthly climate CSVs into Climate/, then reload from the menu.
+  投影: Projection
+  拖动中：经度 %.2f°   纬度 %.2f°: Dragging: lon %.2f°  lat %.2f°
+  持续时间 hours [min,max]: Duration hours [min,max]
+  按图片比例推算: Derive from image ratio
+  按图片比例推算：上缘 %.2f°、下缘 %.2f°（记得保存）: Derived from image ratio: top %.2f°, bottom %.2f° (remember to save).
+  接续 succession: Succession
+  改动先进内存草稿（切换选择不丢，关闭时询问处理）；「保存当前页」立即落盘: Changes go to in-memory drafts first (kept while switching; asked on close); “Save tab” writes to disk.
+  放弃本页改动: Revert tab
+  放弃草稿: Discard drafts
+  效果标识，逗号分隔: Effect ids, comma-separated
+  新世界ID: new world id
+  新现象ID: new phenomenon id
+  新语言代码，如 en: new language code, e.g. en
+  新键: new key
+  日低温 Δ℃: Daily low Δ℃
+  日高温: High
+  时区偏差 timez（分钟）: Timezone offset timez (minutes)
+  时间流速: Time speed
+  时间系统 times: Time system
+  晴: Sunny
+  暂停: Paused
+  暂无数据: No data yet
+  月内平滑 month_smoothing: In-month smoothing month_smoothing
+  月内温度波动 σ month_temp_sigma: In-month temperature σ month_temp_sigma
+  月度确定性生成 · 三层种子 · 图表随机柏林面 · 世界时钟 · 设置编辑器: Monthly deterministic generation · three-tier seeds · chart-random Perlin fields · world clock · settings editor
+  月总量对账强度 monthly_total_strength: Monthly total reconcile monthly_total_strength
+  有 %d 处未保存改动。退出前如何处理？: %d unsaved change(s). What should happen before exit?
+  未保存的改动: Unsaved changes
+  未加载气候数据 · 期望位置 Climate/*.csv: No climate data loaded · expected at Climate/*.csv
+  本地化: Localization
+  本地化 %s: Localization %s
+  本地化文件 %s 警告：%s: Localization file %s warning: %s
+  本地化文件警告：%s: Localization file warning: %s
+  本月气候背景: This month's climate
+  椭圆 ellipse: Ellipse
+  正在启动…: Starting…
+  每日概率 p_per_day: Daily probability p_per_day
+  气象效果 effects —— {id → [标识…]}；日后在天气表格中引用 id: Weather effects effects — {id → [ids…]}; the weather table will reference ids later.
+  没有可保存的世界: No world to save
+  没有可保存的世界现象: No phenomena to save
+  没有可保存的城市: No city to save
+  波动与日照参数（m2 批复：参数摆位，默认值即草案，引擎逐步消费）: Fluctuation & daylight parameters (approved in m2: placeholders with draft defaults, consumed by the engine step by step)
+  浏览…: Browse…
+  海岸 coast: Coast
+  海拔 alti（米）: Altitude alti (m)
+  海洋 sea: Sea
+  添加: Add
+  添加本地化条目需要组名与键名: Adding a localization entry needs a group and a key
+  点击给选中城市定点（即存，城市锚定在图上这个位置）；拖动橙色的 0° 经线 / 赤道线调整；拖动空白处平移、滚轮缩放、双击复位。投影与经纬范围的改动用「保存当前页」落盘: Click to place the selected city (saved instantly; anchored to this spot on the image). Drag the orange 0° meridian / equator lines to adjust; drag empty space to pan, scroll to zoom, double-click to reset. Projection and lat/lon ranges are written by “Save tab”.
+  点选 0° 经线: Pick 0° meridian
+  点选 0° 经线：在参考图上点击 0° 经线所在的一列（此状态下点击不会给城市定点）: Pick 0° meridian: click the column where it runs (clicks won't place cities in this mode).
+  点选赤道: Pick equator
+  点选赤道：在参考图上点击赤道所在的一行（此状态下点击不会给城市定点）: Pick equator: click the row where it runs (clicks won't place cities in this mode).
+  版本 %s: Version %s
+  环境 where: Environment where
+  现实世界: Real world
+  现象: Phenomena
+  现象 %s 已存在: Phenomenon %s already exists
+  现象关系（掣肘/促进：互斥 exclusive / 接续 succession / 促进 ally）: Phenomenon relations (exclusive / succession / ally)
+  现象日期离散 σ·天 phenomena_spread_days: Phenomenon date spread σ·days phenomena_spread_days
+  现象模板 %s: Phenomena template %s
+  用这个语言显示界面: Use this language for the UI
+  界面背景不透明度: Panel opacity
+  界面语言: UI language
+  界面语言已切换: UI language switched
+  留空显示语言代码: empty shows the language code
+  真墨卡托图纵横比例尺一致：按图片宽高比与覆盖经度反推上下缘纬度（赤道位置保持不动；方图整圈 ≈ ±85.05°）: True Mercator maps have a uniform scale: derive top/bottom latitudes from the image ratio and longitude span (equator stays put; a square full-circle map ≈ ±85.05°).
+  短轴 km: Minor axis km
+  确定: OK
+  种子 %s · 今日降水 %.1f mm%s · 风 %.1f m/s · 湿度 %.0f%%: Seed %s · precipitation today %.1f mm%s · wind %.1f m/s · humidity %.0f%%
+  种子 %s · 日日照 %.1f 小时 · 风 %.1f m/s · 湿度 %.0f%%: Seed %s · sunshine today %.1f h · wind %.1f m/s · humidity %.0f%%
+  种子 seed（留空 = 按本地化键名派生）: Seed (empty = derived from the localization key)
+  第 %d 行：不允许用 Tab 缩进，请用两个空格: Line %d: tabs are not allowed for indentation; use two spaces
+  第 %d 行：缩进行出现在任何分组之前: Line %d: an indented line appears before any group
+  第 %d 行：缺少冒号 —— %s: Line %d: missing colon — %s
+  第 %d 行：键为空: Line %d: empty key
+  第 %d 行：顶层只能写分组行，键值要缩进两格写在分组里: Line %d: top level allows group lines only; write key-values indented two spaces inside a group
+  等距圆柱 equirectangular: Equirectangular
+  纬度 lati: Latitude lati
+  纬度带 lat: Latitude band lat
+  组，如 cities: group, e.g. cities
+  经度 long: Longitude long
+  经纬度锁定: Lat/long lock
+  编辑器仍在运行: Editor still running
+  菜单: Menu
+  规则 · 日高温 Δ℃: Rules · daily high Δ℃
+  规则 · 降水偏置 rain_bias: Rules · precipitation bias rain_bias
+  规模 scale_km: Scale scale_km
+  设置编辑器: Settings editor
+  设置编辑器 · 幻想气象局: Settings editor · FictForecast
+  设置编辑器启动失败: Failed to start the settings editor
+  设置编辑器已在运行（独立窗口）: Settings editor is already running (separate window)
+  设置编辑器还开着。退出主程序会一并关闭它；其中未保存的改动会保留为草稿，下次打开编辑器时可以恢复。: The settings editor is still open. Quitting the main program closes it too; its unsaved changes stay as drafts and can be restored next time you open the editor.
+  语言 %s 已存在: Language %s already exists
+  语言代码不能包含斜杠、冒号或句点: Language code cannot contain slashes, colons or dots
+  语言名称 name: Language name
+  语言字体加载失败：%s: Failed to load the language font: %s
+  请先在右侧输入新世界 ID: Enter a new world ID on the right first
+  请先在地图页选择要定位的城市: Pick the city to place on the map tab first
+  请先输入新现象 ID: Enter a new phenomenon ID first
+  请先输入新语言代码（如 en / ja）: Enter a new language code first (e.g. en / ja)
+  请先选择世界: Pick a world first
+  请先选择世界——参考图挂在世界上: Pick a world first — the reference map belongs to the world
+  请点在参考图的上下缘之间: Click between the reference map's top and bottom edges
+  起源 origin（分布规律：纬度带约束——副热带高压不能出现在北极）: Origin (distribution rules: latitude-band constraints — a subtropical high cannot appear over the Arctic)
+  路径关键帧 path_keyframes（t 生命周期 / x,y 世界归一坐标 0..1 / strength 强度）: Path keyframes (t lifecycle / x,y world-normalized 0..1 / strength)
+  跳到下一日: Next day
+  迁移速度 speed_kmh: Movement speed speed_kmh
+  返回: Back
+  退出: Quit
+  选择世界参考图: Choose the world reference map
+  选择语言字体: Choose the language font
+  重新加载气候数据: Reload climate data
+  长轴 km: Major axis km
+  阴: Cloudy
+  陆地 land: Land
+  降水云系过境，出门记得带伞: Rain-bearing clouds passing; take an umbrella
+  降雨可能: Chance of rain
+  随机评分筛选、气候现象（台风/寒潮等）、世界级气象（水晶雨等）、自定义历法规则。: Random scoring & filtering, climate phenomena (typhoons, cold waves…), world-level weather (crystal rain…), custom calendar rules.
+  雨: Rain
+  雪: Snow
+  高压气团控制，天空晴朗: High-pressure air mass; clear skies
+  鼠标处：经度 %.2f°   纬度 %.2f°: At cursor: lon %.2f°  lat %.2f°
+  （Climate/ 下没有城市 CSV）: (no city CSV under Climate/)
+  （Climate/ 下没有找到 CSV）: (no CSV found under Climate/)
+  （Worlds/ 下没有世界文件）: (no world file under Worlds/)
+  （未命名）: (unnamed)
+  （未指定 → UTC）: (unspecified → UTC)
+  （未指定 → 公历）: (unspecified → Gregorian)
+  （未指定）: (unspecified)
+  （留空：启动时显示上次查看的城市）: (empty: show the last viewed city on startup)
+  （该世界下暂无城市——先到「城市」页指定所属世界）: (no cities in this world — set their world on the Cities tab first)
+  （该世界暂无气候现象）: (no phenomena in this world)
+  （随机评分筛选尚未实装）: (random scoring & filtering not yet implemented)
+  （雪）: (snow)
+  ＋ 添加关系: + Add relation
+  ＋ 添加关键帧: + Add keyframe
+  ＋ 添加基准日期: + Add base date
+  ＋ 添加基准时间: + Add base time
+  ＋ 添加壁纸系列: + Add wallpaper set
+  ＋ 添加气象效果: + Add weather effect

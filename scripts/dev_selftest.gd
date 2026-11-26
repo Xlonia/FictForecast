@@ -2,7 +2,8 @@ extends SceneTree
 ## 开发自检（不随游戏运行，headless 执行）：
 ##   godot --headless --path . --script res://scripts/dev_selftest.gd
 ## 覆盖：CSV 解析（两种列排布/表头跳过）、全年逐日生成、记录钳制、
-## 日期推进（平/闰年）、跨月加权、确定性。
+## 日期推进（平/闰年）、跨月加权、确定性、世界随机、投影（含新经纬范围模型）、
+## 界面语言（UiText 翻译/清单/译文覆盖）、语言字体。
 
 var _fails := 0
 
@@ -41,7 +42,6 @@ func _init() -> void:
 	_check(d2.monthly.has("high_temp"), "键在首列解析出 high_temp")
 
 	# —— 3. 全年逐日生成（2087 平年）——
-	# 天气型用数值字面量：0=晴 1=阴 2=雨（与 WeatherEngine.Sky 对齐）
 	var eng := WeatherEngine.new(cd)
 	var counts := {0: 0, 1: 0, 2: 0}
 	var date := {"year": 2087, "month": 1, "day": 1}
@@ -88,10 +88,13 @@ func _init() -> void:
 	print("全年分布：晴 %d / 阴 %d / 雨 %d" % [counts[0], counts[1], counts[2]])
 
 	# —— 8. MiniYaml 与设置存取 ——
-	var yaml_data := {"cities": {"myksolonia": "瑰流", "quoted": "带\"引号"}, "worlds": {"default": "现实世界"}}
+	var yaml_data := {"cities": {"myksolonia": "瑰流", "quoted": "带\"引号"},
+			"ui": {"关闭": "Close", "res://x": "带冒号的键"}}
 	var yaml_back := MiniYaml.parse(MiniYaml.dumps(yaml_data))
 	_check(yaml_back.errors.is_empty(), "MiniYaml 序列化可回读且无错误")
 	_check(yaml_back.data.get("cities", {}).get("myksolonia", "") == "瑰流", "MiniYaml 回读中文值")
+	_check(yaml_back.data.get("ui", {}).get("res://x", "") == "带冒号的键",
+			"键里的冒号（后不跟空格）不当作分隔符")
 	var yaml_parse2 := MiniYaml.parse("# 注释行\nworlds:\n  default: 现实世界\n")
 	_check(yaml_parse2.errors.is_empty() and yaml_parse2.data.get("worlds", {}).get("default", "") == "现实世界",
 			"MiniYaml 解析注释与分组")
@@ -100,8 +103,13 @@ func _init() -> void:
 
 	SettingsStore.ensure_defaults()
 	_check(SettingsStore.list_city_ids().size() >= 2, "检测到至少两座城市 CSV")
+	_check(not SettingsStore.list_world_ids().has("default.phenomena"),
+			"世界列表不含现象文件（list_world_ids 排除 *.phenomena.json）")
+	var city_defaults := SettingsStore.CITY_DEFAULTS.duplicate(true)
+	_check(city_defaults.has("anchor") and city_defaults.has("map_x") and city_defaults.has("map_y"),
+			"城市骨架含锚定字段（anchor / map_x / map_y）")
+	_check(str(SettingsStore.PREFS_DEFAULTS.get("ui_lang", "")) == "zh", "偏好骨架含界面语言 ui_lang")
 	# 世界 JSON 回写测试：只写**临时世界文件**，用后即删——自检不得改写用户的真实数据
-	# （m2 起的旧写法是往真实的 default.json 里写再清理，中途失败就会留下残渣）
 	var tw := "__selftest_world__"
 	var tw_path := SettingsStore.WORLDS_DIR.path_join(tw + ".json")
 	_check(not FileAccess.file_exists(tw_path), "测试世界文件事先不存在（否则上次自检中途失败）")
@@ -114,8 +122,10 @@ func _init() -> void:
 	_check(w2.base_times.size() == 1 and str(w2.base_times[0].get("id", "")) == "selftest_only",
 			"世界 JSON 回读：基准时间")
 	_check(str(w2["seed"]) == "selftest", "世界 JSON 回读：种子字段")
-	_check(is_equal_approx(float((w2["map"] as Dictionary).get("center_long", 0.0)), 90.0),
-			"map 字段随世界 JSON 往返")
+	var w2_map: Dictionary = w2["map"]
+	_check(is_equal_approx(float(w2_map.get("center_long", 0.0)), 90.0), "map 字段随世界 JSON 往返")
+	_check(w2_map.has("lat_top") and w2_map.has("lat_bottom") and w2_map.has("lon_span"),
+			"map 字段补全新骨架（lat_top / lat_bottom / lon_span）")
 	DirAccess.remove_absolute(tw_path)
 	_check(not FileAccess.file_exists(tw_path), "测试世界文件已删除")
 	var city := SettingsStore.load_city("myksolonia")
@@ -199,9 +209,12 @@ func _init() -> void:
 	var dt_cal := WorldRng.display_datetime(0.0, 0, 3000277)
 	_check(dt_cal.year > 10000, "历法锚定 +3000277 天 → 万年历（%d 年）" % dt_cal.year)
 
-	# —— 12. 地图投影（对账《纬度高度计算.py》：画布 2048、±70°）——
+	# —— 12. 地图投影（新经纬范围模型；对账《纬度高度计算.py》：画布 2048、±70°）——
 	var mcfg := MapProjection.normalized({"projection": "mercator", "lat_limit": 70.0, "center_long": 0.0})
 	_check(mcfg["projection"] == "mercator" and mcfg["image"] == "", "地图配置补全骨架")
+	_check(is_equal_approx(float(mcfg["lat_top"]), 70.0) and is_equal_approx(float(mcfg["lat_bottom"]), -70.0),
+			"旧字段 lat_limit 迁移为上下缘纬度（±70）")
+	_check(is_equal_approx(float(mcfg["lon_span"]), 360.0), "默认覆盖整圈经度")
 	_check(not mcfg.is_read_only(), "地图配置可写（常量容器须深拷贝）")
 	_check(absf(MapProjection.mercator_y(70.0) - 1.735415162669) < 1e-9, "墨卡托 y(70°) = 1.735415")
 	# 期望值由《纬度高度计算.py》原式算出：pixel_y = (H/2)·(1 − y/y_max)，H = 2048
@@ -227,14 +240,39 @@ func _init() -> void:
 			"中央经线 150°：0° 经线在 1/12 处")
 	_check(is_equal_approx(MapProjection.to_uv(0.0, 180.0, c150).x, MapProjection.to_uv(0.0, -180.0, c150).x),
 			"±180° 映射到同一处（经度环绕）")
-	_check(is_equal_approx(MapProjection.center_long_for_zero_at(0.25), 90.0), "0° 经线点在 1/4 处 → 中央经线 90°")
-	_check(is_equal_approx(MapProjection.center_long_for_zero_at(0.75), -90.0), "0° 经线点在 3/4 处 → 中央经线 −90°")
+	_check(is_equal_approx(MapProjection.center_long_for_zero_at(0.25, mcfg), 90.0), "0° 经线点在 1/4 处 → 中央经线 90°")
+	_check(is_equal_approx(MapProjection.center_long_for_zero_at(0.75, mcfg), -90.0), "0° 经线点在 3/4 处 → 中央经线 −90°")
+	# 非整圈经度：span 120、中央 60 → u=0.25 处经度 30；u 越出 0..1 = 空位
+	var s120 := MapProjection.normalized({"center_long": 60.0, "lon_span": 120.0})
+	_check(is_equal_approx(MapProjection.from_uv(Vector2(0.25, 0.5), s120).y, 30.0),
+			"覆盖 120°：u=0.25 → 经度 30°")
+	_check(MapProjection.to_uv(0.0, 180.0, s120).x > 1.0, "覆盖 120°：圈外经度的 u 越出 1（空位）")
+	_check(is_equal_approx(MapProjection.center_long_for_zero_at(0.25, s120), 30.0),
+			"覆盖 120°：点选 0° 经线按 span 换算")
+	# 上下不对称 + 点选赤道：赤道挪到 v=0.25 时比例尺（窗口差）不变
+	var asym := MapProjection.normalized({"lat_top": 60.0, "lat_bottom": -40.0})
+	var d_before := MapProjection.mercator_y(60.0) - MapProjection.mercator_y(-40.0)
+	var moved := MapProjection.lat_window_for_equator_at(0.25, asym)
+	var d_after := MapProjection.mercator_y(float(moved["lat_top"])) - MapProjection.mercator_y(float(moved["lat_bottom"]))
+	_check(absf(d_after - d_before) < 1e-6, "点选赤道保持比例尺（窗口差 %.6f → %.6f）" % [d_before, d_after])
+	_check(absf(MapProjection.equator_v(moved) - 0.25) < 1e-4, "赤道落在点选的位置（v=0.25）")
+	# 按图片比例推算（真墨卡托图纵横比例尺一致）
+	var sq := MapProjection.lat_window_from_aspect(2048, 2048, MapProjection.normalized({}))
+	_check(absf(float(sq["lat_top"]) - 85.051129) < 1e-3 and absf(float(sq["lat_bottom"]) + 85.051129) < 1e-3,
+			"方图整圈 → ±85.051°（实际 +%.3f / −%.3f）" % [float(sq["lat_top"]), float(sq["lat_bottom"])])
+	var half := MapProjection.lat_window_from_aspect(4096, 2048, MapProjection.normalized({}))
+	_check(absf(float(half["lat_top"]) - 66.513) < 0.01,
+			"4096×2048 整圈 → ±66.51°（实际 %.3f，用户的参考图口径）" % float(half["lat_top"]))
+	var ec120 := MapProjection.normalized({"projection": "equirectangular", "center_long": 60.0, "lon_span": 120.0})
+	var half_span := MapProjection.lat_window_from_aspect(2048, 2048, ec120)
+	_check(absf(float(half_span["lat_top"]) - 60.0) < 0.01 and absf(float(half_span["lat_bottom"]) + 60.0) < 0.01,
+			"等距圆柱 span 120 方图 → ±60°（实际 +%.3f / −%.3f）" % [float(half_span["lat_top"]), float(half_span["lat_bottom"])])
 	var ecfg := MapProjection.normalized({"projection": "equirectangular"})
+	_check(is_equal_approx(float(ecfg["lat_top"]), 90.0) and is_equal_approx(float(ecfg["lat_bottom"]), -90.0),
+			"等距圆柱默认图高 ±90°（与旧版行为一致）")
 	_check(MapProjection.to_uv(90.0, 0.0, ecfg).y == 0.0 and MapProjection.to_uv(-90.0, 0.0, ecfg).y == 1.0,
 			"等距圆柱：±90° 铺满图高")
 	_check(is_equal_approx(MapProjection.to_uv(45.0, 0.0, ecfg).y, 0.25), "等距圆柱：45°N 在 1/4 高")
-	_check(absf(MapProjection.lat_limit_from_aspect(2048, 2048) - 85.051129) < 1e-4, "方图 → 纬度上限 ±85.051°")
-	_check(absf(MapProjection.lat_limit_from_aspect(3707, 2048) - 70.0) < 0.01, "3707×2048 → 纬度上限 ≈ ±70°")
 
 	# —— 13. 设置存取：缺键的默认值必须可写且互不共享 ——
 	var wa := SettingsStore.load_world("__no_such_world__")
@@ -244,30 +282,70 @@ func _init() -> void:
 	_check((wa["base_times"] as Array).size() == 1 and (wb["base_times"] as Array).is_empty(),
 			"默认值深拷贝：两次加载互不共享")
 	var wa_map: Dictionary = wa["map"]
-	wa_map["lat_limit"] = 33.0
+	wa_map["lat_top"] = 33.0
 	var wb_map: Dictionary = wb["map"]
-	_check(not wb_map.has("lat_limit") and wa_map.has("lat_limit"), "map 默认值互不共享")
+	_check(wb_map.is_empty() and not wa_map.is_empty(), "map 默认值互不共享（另一份仍是空骨架）")
+	_check(is_equal_approx(float(MapProjection.normalized(wb_map)["lat_top"]), 70.0),
+			"空 map 经 normalized 补全后 lat_top 为默认 70")
 	_check(SettingsStore.WORLD_DEFAULTS.has("map"), "世界骨架含 map 字段")
 
-	# —— 14. 偏好文件与按语言显示名（临时文件，用后即删）——
+	# —— 14. 偏好文件（临时文件，用后即删）——
 	var pp := "user://ff_selftest_prefs.json"
-	SettingsStore._save_json(pp, {"default_city": "myksolonia", "panel_opacity": 2.0})
+	SettingsStore._save_json(pp, {"default_city": "myksolonia", "panel_opacity": 2.0, "ui_lang": "en"})
 	var pr := SettingsStore._load_json(pp, SettingsStore.PREFS_DEFAULTS)
 	_check(pr["default_city"] == "myksolonia" and pr["last_city"] == ""
-			and typeof(pr["city_name_lang"]) == TYPE_STRING, "偏好加载：文件值与默认骨架合并")
+			and typeof(pr["city_name_lang"]) == TYPE_STRING and str(pr["ui_lang"]) == "en",
+			"偏好加载：文件值与默认骨架合并（含 ui_lang）")
 	_check(is_equal_approx(float(pr["panel_opacity"]), 2.0), "偏好原始值读回（钳制在 load_preferences）")
 	DirAccess.remove_absolute(pp)
-	_check(SettingsStore.city_display_name("myksolonia") == SettingsStore.city_display_name("myksolonia", "zh"),
-			"显示名默认语言 = zh")
+
+	# —— 15. 界面语言（UiText：翻译 / 回退 / 宽容格式化 / 清单 / 译文覆盖）——
+	var srcs: Dictionary = UiText.scan_sources()
+	_check(srcs.size() > 200, "界面字符串清单扫出 %d 条（>200）" % srcs.size())
+	var bad_keys := 0
+	for k in srcs:
+		var ks := str(k)
+		if ks != ks.strip_edges() or ks.contains(": ") or ks.contains("\n"):
+			bad_keys += 1
+	_check(bad_keys == 0, "清单键都可作为受限 YAML 的键（无首尾空格/冒号空格/换行）")
+	for lang in ["en", "ja"]:
+		var aud: Dictionary = UiText.audit(lang)
+		var miss: int = (aud["missing"] as Dictionary).size()
+		var stale: int = (aud["stale"] as Dictionary).size()
+		_check(miss == 0, "%s 译文覆盖：缺 %d 条（清单 %d 条）" % [lang, miss, int(aud["sources"])])
+		_check(stale == 0, "%s 译文无失效键（清单里已不存在的）" % lang)
+	# 临时语言文件：翻译生效、缺条目回退原文、zh 的 ui 组可改中文措辞
 	var tmp_lang_path := SettingsStore.loc_path("__selftest__")
-	SettingsStore.save_localization_file(tmp_lang_path, {"cities": {"myksolonia": "SELFTEST_NAME"}})
-	_check(SettingsStore.city_display_name("myksolonia", "__selftest__") == "SELFTEST_NAME", "按语言读城市名")
-	_check(SettingsStore.city_display_name("lioepprosia", "__selftest__") == SettingsStore.city_display_name("lioepprosia", "zh")
-			and SettingsStore.city_display_name("lioepprosia", "zh") != "", "语言缺条目回退 zh")
-	_check(SettingsStore.city_display_name("myksolonia", "__no_such_lang__")
-			== SettingsStore.city_display_name("myksolonia", "zh"), "语言文件不存在回退 zh")
+	SettingsStore.save_localization_file(tmp_lang_path, {"ui": {"关闭": "CLOSED", "没有这句": "NOPE"}})
+	UiText.set_language("__selftest__")
+	_check(UiText.t("关闭") == "CLOSED", "界面译文生效（临时语言）")
+	_check(UiText.t("偏好设置") == "偏好设置", "缺译文回退中文原文")
+	_check(UiText.f("城市：%s", ["X"]) == "城市：X", "未翻译的格式串原样套参数")
+	_check(UiText.format("%d 只 = %.1f 只", [3, 3]) == "3 只 = 3.0 只", "类型不匹配时安全转换")
+	_check(UiText.format("%s-%s", ["a"]) == "a-%s", "参数不够时占位符原样保留")
+	_check(UiText.format("100%% %s", ["ok"]) == "100% ok", "%% 转义")
 	SettingsStore._loc_cache.erase(tmp_lang_path)
 	DirAccess.remove_absolute(tmp_lang_path)
+	var zh_ui: Dictionary = SettingsStore.load_localization().data.get("ui", {})
+	UiText.set_language("zh")
+	_check(UiText.t("关闭") == "关闭", "回退 zh：无 ui 组时返回原文")
+
+	# —— 16. 语言定义与字体（临时定义，用后即删；Xnidnise 字体覆盖格鲁吉亚文区）——
+	var tl := "__selftest__"
+	var def_path := SettingsStore.language_def_path(tl)
+	SettingsStore.save_language_def(tl, {"name": "自检语", "font": "res://fictlanguages/fonts/Xnidnise_italic-Regular.ttf"})
+	_check(SettingsStore.language_display_name(tl) == "自检语", "语言定义 name 生效")
+	var f := SettingsStore.language_font(tl)
+	_check(f != null, "语言字体加载成功")
+	if f != null:
+		_check(f.has_char(0x10E5), "字体覆盖格鲁吉亚文 U+10E5（Unicode 原文映射）")
+		_check((f.fallbacks as Array).size() == 1, "字体回退链挂在界面默认字体上")
+	SettingsStore._font_cache.clear()
+	SettingsStore.save_language_def(tl, {"name": "", "font": ""})
+	_check(SettingsStore.language_display_name(tl) == tl, "name 留空显示语言代码")
+	SettingsStore._font_cache.clear()
+	DirAccess.remove_absolute(def_path)
+	SettingsStore.invalidate_localization_cache()
 	_finish()
 
 

@@ -12,6 +12,11 @@ var sky: int = SkyKind.SUNNY:
 		sky = value
 		queue_redraw()
 
+var snow := false:  # 雨（雪）天：画雪花而不是雨滴
+	set(value):
+		snow = value
+		queue_redraw()
+
 var _time := 0.0
 var _cloud_light := StyleBoxFlat.new()
 var _cloud_dark := StyleBoxFlat.new()
@@ -41,7 +46,10 @@ func _draw() -> void:
 			_draw_cloud(Vector2(w * 0.55 + sin(_time * 0.7) * 3.0, h * 0.62), m * 0.30, _cloud_light)
 		SkyKind.RAINY:
 			_draw_cloud(Vector2(w * 0.50 + sin(_time * 0.7) * 3.0, h * 0.40), m * 0.30, _cloud_dark)
-			_draw_rain(w, h)
+			if snow:
+				_draw_snow(w, h)
+			else:
+				_draw_rain(w, h)
 
 
 func _draw_sun(center: Vector2, radius: float, strength: float) -> void:
@@ -71,3 +79,17 @@ func _draw_rain(w: float, h: float) -> void:
 		var alpha := clampf(sin(phase * PI) * 1.4, 0.0, 1.0)
 		draw_line(Vector2(x, y), Vector2(x, y + 10.0),
 				Color(0.50, 0.70, 0.98, 0.85 * alpha), 2.5, true)
+
+
+func _draw_snow(w: float, h: float) -> void:
+	var n := 7
+	for i in n:
+		var phase := fposmod(_time * 0.22 + float(i) / float(n), 1.0)
+		var x := w * (0.25 + 0.50 * float(i) / float(n - 1)) + sin(_time * 1.2 + float(i) * 1.7) * 7.0
+		var y := h * (0.55 + phase * 0.38)
+		var alpha := clampf(sin(phase * PI) * 1.4, 0.0, 1.0)
+		var center := Vector2(x, y)
+		draw_circle(center, 3.0, Color(0.93, 0.96, 1.0, 0.95 * alpha))
+		for k in 3:  # 六瓣小星
+			var dir := Vector2.from_angle(PI * float(k) / 3.0)
+			draw_line(center - dir * 4.5, center + dir * 4.5, Color(0.93, 0.96, 1.0, 0.6 * alpha), 1.2, true)

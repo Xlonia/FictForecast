@@ -287,6 +287,13 @@ min_value = -90.0
 max_value = 90.0
 step = 0.01
 
+[node name="AnchorBtn" type="Button" parent="Root/Column/Tabs/CityTab/Scroll/Form/GeoRow"]
+tooltip_text = "开启：以输入框里的经纬度为准，城市在图上的位置随世界地图配置移动；关闭：以城市在参考图上的位置为准，经纬度随地图配置换算"
+layout_mode = 2
+toggle_mode = true
+button_pressed = true
+text = "经纬度锁定"
+
 [node name="AltiKey" type="Label" parent="Root/Column/Tabs/CityTab/Scroll/Form/GeoRow"]
 layout_mode = 2
 theme_override_colors/font_color = Color(0.62, 0.69, 0.8, 1)
@@ -345,7 +352,7 @@ theme_override_constants/separation = 4
 [node name="Title" type="Label" parent="Root/Column/Tabs/CityTab/Scroll/Form/WallSection"]
 layout_mode = 2
 theme_override_colors/font_color = Color(0.62, 0.69, 0.8, 1)
-text = "壁纸系列 wallpaper —— {id: [路径…]}；日后在天气表格中引用 id"
+text = "壁纸系列 wallpaper —— {id → [路径…]}；日后在天气表格中引用 id"
 
 [node name="Rows" type="VBoxContainer" parent="Root/Column/Tabs/CityTab/Scroll/Form/WallSection"]
 layout_mode = 2
@@ -362,7 +369,7 @@ theme_override_constants/separation = 4
 [node name="Title" type="Label" parent="Root/Column/Tabs/CityTab/Scroll/Form/EffectSection"]
 layout_mode = 2
 theme_override_colors/font_color = Color(0.62, 0.69, 0.8, 1)
-text = "气象效果 effects —— {id: [标识…]}；日后在天气表格中引用 id"
+text = "气象效果 effects —— {id → [标识…]}；日后在天气表格中引用 id"
 
 [node name="Rows" type="VBoxContainer" parent="Root/Column/Tabs/CityTab/Scroll/Form/EffectSection"]
 layout_mode = 2
@@ -715,31 +722,55 @@ text = "投影"
 custom_minimum_size = Vector2(176, 0)
 layout_mode = 2
 
-[node name="LatKey" type="Label" parent="Root/Column/Tabs/MapTab/MapCfg"]
+[node name="TopKey" type="Label" parent="Root/Column/Tabs/MapTab/MapCfg"]
 layout_mode = 2
 theme_override_colors/font_color = Color(0.62, 0.69, 0.8, 1)
-text = "纬度上限 ±"
+text = "上缘纬度"
 
-[node name="MapLatLimitSpin" type="SpinBox" parent="Root/Column/Tabs/MapTab/MapCfg"]
+[node name="MapLatTopSpin" type="SpinBox" parent="Root/Column/Tabs/MapTab/MapCfg"]
 custom_minimum_size = Vector2(104, 0)
 layout_mode = 2
-min_value = 1.0
+min_value = -89.9
 max_value = 89.9
 step = 0.01
 value = 70.0
 suffix = "°"
 
+[node name="BottomKey" type="Label" parent="Root/Column/Tabs/MapTab/MapCfg"]
+layout_mode = 2
+theme_override_colors/font_color = Color(0.62, 0.69, 0.8, 1)
+text = "下缘纬度"
+
+[node name="MapLatBottomSpin" type="SpinBox" parent="Root/Column/Tabs/MapTab/MapCfg"]
+custom_minimum_size = Vector2(104, 0)
+layout_mode = 2
+min_value = -89.9
+max_value = 89.9
+step = 0.01
+value = -70.0
+suffix = "°"
+
 [node name="MapAspectBtn" type="Button" parent="Root/Column/Tabs/MapTab/MapCfg"]
 layout_mode = 2
-tooltip_text = "整圈 360° 宽的墨卡托图：由图片宽高比反推纬度上限（方图 ≈ ±85.05°）"
+tooltip_text = "真墨卡托图纵横比例尺一致：按图片宽高比与覆盖经度反推上下缘纬度（赤道位置保持不动；方图整圈 ≈ ±85.05°）"
 text = "按图片比例推算"
 
-[node name="CenterKey" type="Label" parent="Root/Column/Tabs/MapTab/MapCfg"]
+[node name="MapEquatorBtn" type="Button" parent="Root/Column/Tabs/MapTab/MapCfg"]
+layout_mode = 2
+tooltip_text = "上下裁剪不对称的图：在参考图上点击赤道所在的一行，自动换算上下缘纬度（比例尺不变）"
+toggle_mode = true
+text = "点选赤道"
+
+[node name="MapLon" type="HBoxContainer" parent="Root/Column/Tabs/MapTab"]
+layout_mode = 2
+theme_override_constants/separation = 8
+
+[node name="CenterKey" type="Label" parent="Root/Column/Tabs/MapTab/MapLon"]
 layout_mode = 2
 theme_override_colors/font_color = Color(0.62, 0.69, 0.8, 1)
 text = "中央经线"
 
-[node name="MapCenterSpin" type="SpinBox" parent="Root/Column/Tabs/MapTab/MapCfg"]
+[node name="MapCenterSpin" type="SpinBox" parent="Root/Column/Tabs/MapTab/MapLon"]
 custom_minimum_size = Vector2(104, 0)
 layout_mode = 2
 min_value = -180.0
@@ -747,17 +778,37 @@ max_value = 180.0
 step = 0.01
 suffix = "°"
 
-[node name="MapPickZeroBtn" type="Button" parent="Root/Column/Tabs/MapTab/MapCfg"]
+[node name="MapPickZeroBtn" type="Button" parent="Root/Column/Tabs/MapTab/MapLon"]
 layout_mode = 2
 tooltip_text = "在参考图上点击 0° 经线所在的一列，自动换算中央经线"
 toggle_mode = true
 text = "点选 0° 经线"
 
+[node name="SpanKey" type="Label" parent="Root/Column/Tabs/MapTab/MapLon"]
+layout_mode = 2
+theme_override_colors/font_color = Color(0.62, 0.69, 0.8, 1)
+text = "图片覆盖经度"
+
+[node name="MapSpanSpin" type="SpinBox" parent="Root/Column/Tabs/MapTab/MapLon"]
+custom_minimum_size = Vector2(104, 0)
+layout_mode = 2
+tooltip_text = "图片宽度覆盖多少度经度。不足 360° 时其余经度是空位：在图上拖动即可看到"
+min_value = 1.0
+max_value = 360.0
+step = 0.5
+value = 360.0
+suffix = "°"
+
+[node name="MapResetBtn" type="Button" parent="Root/Column/Tabs/MapTab/MapLon"]
+layout_mode = 2
+tooltip_text = "平移与缩放复位（也可以在图上双击）"
+text = "复位视图"
+
 [node name="MapReadout" type="Label" parent="Root/Column/Tabs/MapTab"]
 layout_mode = 2
 theme_override_colors/font_color = Color(0.55, 0.62, 0.72, 1)
 theme_override_font_sizes/font_size = 13
-text = "参考图按整圈 360° 经度铺满。"
+text = "参考图挂在当前世界上。加载后可给城市定点、标定 0° 经线与赤道"
 
 [node name="MapView" type="Control" parent="Root/Column/Tabs/MapTab"]
 layout_mode = 2
@@ -770,7 +821,51 @@ theme_override_constants/separation = 8
 [node name="LocHint" type="Label" parent="Root/Column/Tabs/LocTab"]
 layout_mode = 2
 theme_override_colors/font_color = Color(0.55, 0.62, 0.72, 1)
-text = "res://Localization/<语言>.yaml —— 每个语言一个子页签；组: 键: 值（受限 YAML 子集）"
+text = "res://Localization/<语言>.yaml —— 每个语言一个文件；分组 → 键 → 值（受限 YAML 子集）。ui 组是界面译文：键 = 中文原文"
+
+[node name="LocDef" type="VBoxContainer" parent="Root/Column/Tabs/LocTab"]
+layout_mode = 2
+theme_override_constants/separation = 4
+
+[node name="NameRow" type="HBoxContainer" parent="Root/Column/Tabs/LocTab/LocDef"]
+layout_mode = 2
+theme_override_constants/separation = 8
+
+[node name="NameKey" type="Label" parent="Root/Column/Tabs/LocTab/LocDef/NameRow"]
+custom_minimum_size = Vector2(210, 0)
+layout_mode = 2
+theme_override_colors/font_color = Color(0.62, 0.69, 0.8, 1)
+text = "语言名称 name"
+
+[node name="NameEdit" type="LineEdit" parent="Root/Column/Tabs/LocTab/LocDef/NameRow"]
+layout_mode = 2
+size_flags_horizontal = 3
+placeholder_text = "留空显示语言代码"
+
+[node name="FontRow" type="HBoxContainer" parent="Root/Column/Tabs/LocTab/LocDef"]
+layout_mode = 2
+theme_override_constants/separation = 8
+
+[node name="FontKey" type="Label" parent="Root/Column/Tabs/LocTab/LocDef/FontRow"]
+custom_minimum_size = Vector2(210, 0)
+layout_mode = 2
+theme_override_colors/font_color = Color(0.62, 0.69, 0.8, 1)
+text = "字体 font（留空 = 不覆盖）"
+
+[node name="FontEdit" type="LineEdit" parent="Root/Column/Tabs/LocTab/LocDef/FontRow"]
+layout_mode = 2
+size_flags_horizontal = 3
+placeholder_text = "字体文件路径，如 fictlanguages/fonts/xxx.ttf"
+
+[node name="FontBtn" type="Button" parent="Root/Column/Tabs/LocTab/LocDef/FontRow"]
+layout_mode = 2
+text = "浏览…"
+
+[node name="Preview" type="Label" parent="Root/Column/Tabs/LocTab/LocDef"]
+layout_mode = 2
+theme_override_colors/font_color = Color(0.55, 0.62, 0.72, 1)
+theme_override_font_sizes/font_size = 13
+text = "字体预览：0123 ABC 洛沅"
 
 [node name="LocTop" type="HBoxContainer" parent="Root/Column/Tabs/LocTab"]
 layout_mode = 2
@@ -788,6 +883,16 @@ placeholder_text = "新语言代码，如 en"
 [node name="NewLangBtn" type="Button" parent="Root/Column/Tabs/LocTab/LocTop"]
 layout_mode = 2
 text = "创建语言"
+
+[node name="UseBtn" type="Button" parent="Root/Column/Tabs/LocTab/LocTop"]
+tooltip_text = "把界面语言（软件偏好）设为当前语言，主界面与编辑器都随之切换"
+layout_mode = 2
+text = "用这个语言显示界面"
+
+[node name="ImportBtn" type="Button" parent="Root/Column/Tabs/LocTab/LocTop"]
+tooltip_text = "把程序里全部界面中文原文加进 ui 组（键 = 中文原文），填上译文即可"
+layout_mode = 2
+text = "导入界面字符串"
 
 [node name="LocScroll" type="ScrollContainer" parent="Root/Column/Tabs/LocTab"]
 layout_mode = 2
@@ -830,8 +935,17 @@ layout_mode = 2
 size_flags_horizontal = 3
 theme_override_colors/font_color = Color(0.55, 0.62, 0.72, 1)
 theme_override_font_sizes/font_size = 13
-text = "改动先存内存草稿（关闭时会询问处理）；「保存当前页」立即落盘"
+text = "改动先进内存草稿（切换选择不丢，关闭时询问处理）；「保存当前页」立即落盘"
 
 [node name="SaveBtn" type="Button" parent="Root/Column/Bottom"]
 layout_mode = 2
 text = "保存当前页"
+
+[node name="SaveAllBtn" type="Button" parent="Root/Column/Bottom"]
+layout_mode = 2
+text = "保存全部"
+
+[node name="RevertBtn" type="Button" parent="Root/Column/Bottom"]
+tooltip_text = "把当前页正在编辑的文档恢复成已保存的状态（未保存的改动丢弃）"
+layout_mode = 2
+text = "放弃本页改动"

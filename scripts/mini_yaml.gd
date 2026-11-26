@@ -28,7 +28,9 @@ static func parse(text: String) -> Dictionary:
 			errors.append("第 %d 行：不允许用 Tab 缩进，请用两个空格" % (i + 1))
 			continue
 		var indented := raw.begins_with(" ")
-		var sep := line.find(":")
+		# 分隔符 = 后面跟空格（或行尾）的第一个冒号：键里可以带冒号（如 res://x、界面原文），
+		# 但键里不能出现“冒号+空格”——那种键无法用这种语法表示。
+		var sep := _find_sep(line)
 		if sep < 0:
 			errors.append("第 %d 行：缺少冒号 —— %s" % [i + 1, line])
 			continue
@@ -48,7 +50,7 @@ static func parse(text: String) -> Dictionary:
 			data[group][key] = value
 		else:
 			if not value.is_empty():
-				errors.append("第 %d 行：顶层不允许直接“键: 值”，请先建分组再缩进" % (i + 1))
+				errors.append("第 %d 行：顶层只能写分组行，键值要缩进两格写在分组里" % (i + 1))
 				continue
 			group = key
 			if not data.has(group):
@@ -66,6 +68,13 @@ static func dumps(data: Dictionary) -> String:
 			out.append("%s%s: %s" % [INDENT, str(key), _fmt_value(str(entries[key]))])
 		out.append("")
 	return "\n".join(out)
+
+
+static func _find_sep(line: String) -> int:
+	for i in line.length():
+		if line[i] == ":" and (i + 1 >= line.length() or line[i + 1] == " "):
+			return i
+	return -1
 
 
 static func _clean_value(v: String) -> String:

@@ -16,7 +16,7 @@ corner_radius_bottom_left = 10
 
 [node name="Preferences" type="Window"]
 title = "偏好设置"
-size = Vector2i(458, 330)
+size = Vector2i(458, 372)
 visible = false
 unresizable = true
 transient = true
@@ -58,6 +58,20 @@ theme_override_colors/font_color = Color(0.62, 0.69, 0.8, 1)
 text = "偏好城市"
 
 [node name="CityPick" type="OptionButton" parent="Panel/Column/CityRow"]
+layout_mode = 2
+size_flags_horizontal = 3
+
+[node name="UiRow" type="HBoxContainer" parent="Panel/Column"]
+layout_mode = 2
+theme_override_constants/separation = 10
+
+[node name="UiKey" type="Label" parent="Panel/Column/UiRow"]
+custom_minimum_size = Vector2(180, 0)
+layout_mode = 2
+theme_override_colors/font_color = Color(0.62, 0.69, 0.8, 1)
+text = "界面语言"
+
+[node name="UiPick" type="OptionButton" parent="Panel/Column/UiRow"]
 layout_mode = 2
 size_flags_horizontal = 3
 
@@ -110,7 +124,7 @@ text = "启动时默认展示偏好城市；留空则显示上次查看的城市
 layout_mode = 2
 theme_override_colors/font_color = Color(0.55, 0.62, 0.72, 1)
 theme_override_font_sizes/font_size = 13
-text = "城市名称语言读取 Localization/<语言>.yaml，缺条目时回退中文。"
+text = "城市名称与界面文字读取 Localization/<语言>.yaml，缺条目时回退中文。"
 
 [node name="Spacer" type="Control" parent="Panel/Column"]
 layout_mode = 2

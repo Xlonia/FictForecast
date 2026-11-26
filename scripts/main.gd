@@ -5,8 +5,10 @@ extends Control
 ## 每天的天气由 WeatherEngine 按世界三层种子确定性生成（同一天永远同一份天气）。
 ## 随机评分筛选机制尚未实装（月度预生成即其前置结构）。
 ##
-## 软件偏好（偏好城市 / 城市名称语言 / 界面背景不透明度）由本脚本持有并写盘，
+## 软件偏好（偏好城市 / 界面语言 / 城市名称语言 / 界面背景不透明度）由本脚本持有并写盘，
 ## 「偏好设置」窗口（嵌入主窗口的子窗口）只负责改数据。
+## 界面文字：场景里的静态文字由 UiText.install() 登记，代码里的文字走 UiText.t()/f()
+## （译文在 Localization/<语言>.yaml 的 ui 组，键 = 中文原文）。
 ##
 ## 开发辅助环境变量：FF_TIME_SCALE（时间流速）、FF_FORCE_SKY（强制天气型）、
 ## FF_OPEN_EDITOR（启动即开编辑器）、FF_PREFS_FILE（重定向偏好文件，测试时不污染真实偏好）。
@@ -21,6 +23,20 @@ const ID_PREFS := 105
 const ID_QUIT := 102
 const ID_HELP_GUIDE := 200
 const ID_HELP_ABOUT := 201
+
+# 顶栏菜单序号
+const MENU_MAIN := 0
+const MENU_HELP := 1
+
+# 主菜单项序号（_build_menus 里的添加顺序）
+const MI_CITY := 0
+const MI_SPEED := 1
+const MI_RELOAD := 2
+const MI_NEXT_DAY := 3
+const MI_RESUME := 4
+const MI_EDITOR := 5
+const MI_PREFS := 6
+const MI_QUIT := 8
 
 # 「界面背景不透明度」作用的五个面板
 const PANEL_PATHS := [
@@ -76,6 +92,31 @@ const SKY_BG := {
 	SkyKind.RAINY: Color(0.16, 0.21, 0.28),
 }
 
+# 使用说明 / 关于：逐段可翻译（界面语言的 ui 组以中文原文为键）
+const HELP_PARAS: Array = [
+	"【数据】",
+	"Climate/ 目录下的每个 CSV 视为一座城市。逐行一个月：12 个月值 + 键名（首列或末列均可，自动识别）+ 注释列（可省略）；月份表头行会被自动跳过。",
+	"已支持键名：平均日高温 / 平均日低温 / 平均日均温 / 平均降水量 / 平均日照时长 / 平均湿度 / 气象记录高温 / 气象记录低温 / 平均降水天数 / 平均降雪天数。其他键（如“气候表现-*”）会被原样保留，供未来扩展。",
+	"",
+	"【当前机制】",
+	"· 随机种子分三层（年/月/日），来自城市所属的世界；同一天永远生成同一份天气。",
+	"· 雨日数量按当月「平均降水天数」锁定；非雨日按日照时长分晴/阴；月降水量与月均温向气候表对账（强度见世界设置）。",
+	"· 高低温在月均值上叠加确定性波动，并被当月气象记录钳制。",
+	"· 顶栏“菜单”里可切换城市、调整时间流速、跳到下一日、恢复现在、打开设置编辑器与偏好设置。",
+	"",
+	"【尚未实装】",
+	"随机评分筛选、气候现象（台风/寒潮等）、世界级气象（水晶雨等）、自定义历法规则。",
+]
+const ABOUT_PARAS: Array = [
+	"幻想气象局 FictForecast",
+	"",
+	"为幻想世界提供一份可靠的天气预报——用于创作，以及向同好炫耀。",
+	"",
+	"版本 %s",
+	"月度确定性生成 · 三层种子 · 图表随机柏林面 · 世界时钟 · 设置编辑器",
+	"（随机评分筛选尚未实装）",
+]
+
 var climates: Array[ClimateData] = []
 var climate: ClimateData = null
 var engine: WeatherEngine = null
@@ -92,11 +133,16 @@ var _last_date_key := ""
 var prefs: Dictionary = {}            # 软件偏好（SettingsStore.PREFS_DEFAULTS 骨架）
 var _prefs_save_timer: Timer          # 偏好改动防抖写盘
 
+var main_menu: PopupMenu
+var help_menu: PopupMenu
 var city_menu: PopupMenu
 var speed_menu: PopupMenu
 var help_dialog: AcceptDialog
 var about_dialog: AcceptDialog
+var quit_dialog: ConfirmationDialog   # 编辑器仍在运行时的退出确认
 var month_value_labels := {}  # 语义键 -> 数值 Label
+
+var editor_process_pid: int = 0
 
 @onready var background: ColorRect = $Background
 @onready var prefs_panel: Window = $Preferences
@@ -117,6 +163,12 @@ var month_value_labels := {}  # 语义键 -> 数值 Label
 func _ready() -> void:
 	SettingsStore.ensure_defaults()
 	prefs = SettingsStore.load_preferences()
+	# 界面语言：先登记场景里的静态文字（必须在任何代码改写它们之前），再换成当前语言
+	UiText.set_language(str(prefs.get("ui_lang", "zh")))
+	UiText.install(self, true)
+	SettingsStore.apply_ui_font(str(prefs.get("ui_lang", "zh")))
+	# 关主窗口先走 _request_quit（编辑器还开着时要问一句），不再由场景树直接退出
+	get_tree().auto_accept_quit = false
 	var env_scale := OS.get_environment("FF_TIME_SCALE")
 	if env_scale.is_valid_float():
 		time_speed = maxf(env_scale.to_float(), 0.0)
@@ -127,6 +179,7 @@ func _ready() -> void:
 	_reload_climates()
 	_apply_world_time()
 	_apply_panel_opacity()
+	_apply_name_fonts()
 	# 偏好改动防抖写盘（拖动不透明度滑条时不逐帧写文件）
 	_prefs_save_timer = Timer.new()
 	_prefs_save_timer.one_shot = true
@@ -148,8 +201,8 @@ func _ready() -> void:
 	if env_sky.is_valid_int():
 		current_sky = clampi(env_sky.to_int(), 0, 2)
 		weather_icon.sky = current_sky
-		weather_name.text = SKY_NAMES[current_sky]
-		weather_desc.text = SKY_DESC[current_sky]
+		weather_name.text = UiText.t(SKY_NAMES[current_sky])
+		weather_desc.text = UiText.t(SKY_DESC[current_sky])
 		background.color = _sky_bg_color()
 
 
@@ -231,10 +284,10 @@ func _update_clock() -> void:
 	var dt := Time.get_datetime_dict_from_unix_time(int(sim_unix))
 	time_of_day = float(dt.hour * 3600 + dt.minute * 60 + dt.second)
 	var wd := _weekday(dt.year, dt.month, dt.day)
-	clock_label.text = "%04d年%02d月%02d日 %s  %02d:%02d:%02d" % [
+	clock_label.text = UiText.f("%04d年%02d月%02d日 %s  %02d:%02d:%02d", [
 		dt.year, dt.month, dt.day,
-		WEEKDAY_NAMES[wd], dt.hour, dt.minute, dt.second,
-	]
+		UiText.t(WEEKDAY_NAMES[wd]), dt.hour, dt.minute, dt.second,
+	])
 
 
 @warning_ignore("integer_division")
@@ -321,8 +374,9 @@ func _refresh_day() -> void:
 	if climate == null or engine == null:
 		current_sky = SkyKind.SUNNY
 		weather_icon.sky = current_sky
-		weather_name.text = "暂无数据"
-		weather_desc.text = "把逐月气候 CSV 放进 Climate/ 目录，再从菜单重新加载"
+		weather_icon.snow = false
+		weather_name.text = UiText.t("暂无数据")
+		weather_desc.text = UiText.t("把逐月气候 CSV 放进 Climate/ 目录，再从菜单重新加载")
 		high_value.text = "—"
 		low_value.text = "—"
 		rain_value.text = "—"
@@ -333,25 +387,27 @@ func _refresh_day() -> void:
 	current_sky = rep["sky"]
 	weather_icon.sky = current_sky
 	var is_snow: bool = rep.get("snow", false)
-	weather_name.text = "雪" if is_snow else SKY_NAMES[current_sky]
-	weather_desc.text = "低温降水，落地成雪" if is_snow else SKY_DESC[current_sky]
+	weather_icon.snow = is_snow
+	weather_name.text = UiText.t("雪") if is_snow else UiText.t(SKY_NAMES[current_sky])
+	weather_desc.text = UiText.t("低温降水，落地成雪") if is_snow else UiText.t(SKY_DESC[current_sky])
 	high_value.text = "%.0f°C" % rep["high"]
 	low_value.text = "%.0f°C" % rep["low"]
 	rain_value.text = "%d%%" % roundi(rep["rain_prob"] * 100.0)
+	var common := "种子 %s · 日日照 %.1f 小时 · 风 %.1f m/s · 湿度 %.0f%%"
 	if current_sky == SkyKind.RAINY:
-		flavor_label.text = "种子 %s · 今日降水 %.1f mm%s · 风 %.1f m/s · 湿度 %.0f%%" % [
+		flavor_label.text = UiText.f("种子 %s · 今日降水 %.1f mm%s · 风 %.1f m/s · 湿度 %.0f%%", [
 			rep["seed_key"], rep.get("precip_mm", 0.0),
-			"（雪）" if is_snow else "", rep.get("wind", 0.0), rep.get("humidity", 0.0),
-		]
+			UiText.t("（雪）") if is_snow else "", rep.get("wind", 0.0), rep.get("humidity", 0.0),
+		])
 	else:
-		flavor_label.text = "种子 %s · 日日照 %.1f 小时 · 风 %.1f m/s · 湿度 %.0f%%" % [
+		flavor_label.text = UiText.f(common, [
 			rep["seed_key"], rep["sun_daily"], rep.get("wind", 0.0), rep.get("humidity", 0.0),
-		]
+		])
 	_update_status()
 
 
 func _refresh_month_panel() -> void:
-	month_title.text = "%d 月气候背景" % sim_date.month
+	month_title.text = UiText.f("%d 月气候背景", [sim_date.month])
 	for row in MONTH_ROWS:
 		var label: Label = month_value_labels.get(row[0], null)
 		if label == null:
@@ -360,19 +416,19 @@ func _refresh_month_panel() -> void:
 		if climate != null:
 			v = climate.month_value(row[0], sim_date.month)
 		var fmt: String = row[2]
-		label.text = "—" if is_nan(v) else (fmt % v)
+		label.text = "—" if is_nan(v) else (UiText.t(fmt) % v)  # 单位（“%.1f 天”这类）也走翻译
 
 
 func _update_status() -> void:
 	if climate == null:
-		status_label.text = "未加载气候数据 · 期望位置 Climate/*.csv"
+		status_label.text = UiText.t("未加载气候数据 · 期望位置 Climate/*.csv")
 		return
 	var extra := ""
 	if climate.extra_keys.size() > 0:
-		extra = " · 另有 %d 个未映射键已原样保留" % climate.extra_keys.size()
+		extra = " " + UiText.f("· 另有 %d 个未映射键已原样保留", [climate.extra_keys.size()])
 	var skipped := ""
 	if climate.skipped_rows > 0:
-		skipped = " · 跳过 %d 行" % climate.skipped_rows
+		skipped = " " + UiText.f("· 跳过 %d 行", [climate.skipped_rows])
 	# 城市基础数据（Cities/<ID>.json）：坐标、海拔、所属世界、历法、时间系统
 	var cd := SettingsStore.load_city(climate.city_name)
 	var ctx := _time_context()
@@ -380,11 +436,11 @@ func _update_status() -> void:
 	if str(cd.world) != "":
 		var wd := SettingsStore.world_display_name(str(cd.world))
 		world_shown = str(cd.world) if wd.is_empty() else wd
-	status_label.text = "城市：%s（%.1f°, %.1f°, %.0fm · 世界 %s · 历法 %s · 时间系统 %s · 时区 %+d 分）　·　数据：%s　·　机制：三层种子 + 月度确定性生成（雨日锁定/降水对账/距平零和/露点中介）%s%s" % [
+	status_label.text = UiText.f("城市：%s（%.1f°, %.1f°, %.0fm · 世界 %s · 历法 %s · 时间系统 %s · 时区 %+d 分）　·　数据：%s　·　机制：三层种子 + 月度确定性生成（雨日锁定/降水对账/距平零和/露点中介）%s%s", [
 		_city_label(climate.city_name), float(cd.long), float(cd.lati), float(cd.alti),
-		world_shown, ctx["cal_id"], ctx["times_id"], int(cd.timez),
+		world_shown, UiText.t(str(ctx["cal_id"])), UiText.t(str(ctx["times_id"])), int(cd.timez),
 		climate.source_path.get_file(), extra, skipped,
-	]
+	])
 
 
 func _sky_bg_color() -> Color:
@@ -400,47 +456,58 @@ func _sky_bg_color() -> Color:
 	return Color(base.r * dim, base.g * dim, base.b * dim)
 
 
-func _fmt(v: float, fmt: String) -> String:
-	return "—" if is_nan(v) else (fmt % v)
-
-
 # —— 菜单 ——
 
 func _build_menus() -> void:
-	# MenuBar 的菜单 = 直接把 PopupMenu 挂为子节点，显示标题取节点名
-	var m := PopupMenu.new()
-	m.name = "菜单"
-	menu_bar.add_child(m)
+	# MenuBar 的菜单 = 直接把 PopupMenu 挂为子节点，显示标题另设（不用节点名：节点名保持稳定）
+	main_menu = PopupMenu.new()
+	main_menu.name = "MainMenu"
+	menu_bar.add_child(main_menu)
 
 	city_menu = PopupMenu.new()
 	city_menu.name = "CityMenu"
-	m.add_child(city_menu)
-	m.add_submenu_item("城市", "CityMenu")
+	main_menu.add_child(city_menu)
+	main_menu.add_submenu_item("", "CityMenu")
 	city_menu.index_pressed.connect(_on_city_selected)
 
 	speed_menu = PopupMenu.new()
 	speed_menu.name = "SpeedMenu"
-	m.add_child(speed_menu)
-	m.add_submenu_item("时间流速", "SpeedMenu")
+	main_menu.add_child(speed_menu)
+	main_menu.add_submenu_item("", "SpeedMenu")
 	speed_menu.index_pressed.connect(_on_speed_selected)
 
-	m.add_item("重新加载气候数据", ID_RELOAD)
-	m.add_item("跳到下一日", ID_NEXT_DAY)
-	m.add_item("恢复现在", ID_RESUME_NOW)
-	m.add_item("设置编辑器", ID_EDITOR)
-	m.add_item("偏好设置…", ID_PREFS)
-	m.add_separator()
-	m.add_item("退出", ID_QUIT)
-	m.id_pressed.connect(_on_main_menu)
+	main_menu.add_item("", ID_RELOAD)
+	main_menu.add_item("", ID_NEXT_DAY)
+	main_menu.add_item("", ID_RESUME_NOW)
+	main_menu.add_item("", ID_EDITOR)
+	main_menu.add_item("", ID_PREFS)
+	main_menu.add_separator()
+	main_menu.add_item("", ID_QUIT)
+	main_menu.id_pressed.connect(_on_main_menu)
 
-	var h := PopupMenu.new()
-	h.name = "帮助"
-	menu_bar.add_child(h)
-	h.add_item("使用说明", ID_HELP_GUIDE)
-	h.add_item("关于", ID_HELP_ABOUT)
-	h.id_pressed.connect(_on_help_menu)
+	help_menu = PopupMenu.new()
+	help_menu.name = "HelpMenu"
+	menu_bar.add_child(help_menu)
+	help_menu.add_item("", ID_HELP_GUIDE)
+	help_menu.add_item("", ID_HELP_ABOUT)
+	help_menu.id_pressed.connect(_on_help_menu)
+	_fill_menu_texts()
 
-	_rebuild_speed_menu()
+
+## 菜单文字（切换界面语言时重填；项的序号固定，见 MI_* 常量）。
+func _fill_menu_texts() -> void:
+	menu_bar.set_menu_title(MENU_MAIN, UiText.t("菜单"))
+	menu_bar.set_menu_title(MENU_HELP, UiText.t("帮助"))
+	main_menu.set_item_text(MI_CITY, UiText.t("城市"))
+	main_menu.set_item_text(MI_SPEED, UiText.t("时间流速"))
+	main_menu.set_item_text(MI_RELOAD, UiText.t("重新加载气候数据"))
+	main_menu.set_item_text(MI_NEXT_DAY, UiText.t("跳到下一日"))
+	main_menu.set_item_text(MI_RESUME, UiText.t("恢复现在"))
+	main_menu.set_item_text(MI_EDITOR, UiText.t("设置编辑器"))
+	main_menu.set_item_text(MI_PREFS, UiText.t("偏好设置…"))
+	main_menu.set_item_text(MI_QUIT, UiText.t("退出"))
+	help_menu.set_item_text(0, UiText.t("使用说明"))
+	help_menu.set_item_text(1, UiText.t("关于"))
 
 
 func _rebuild_city_menu() -> void:
@@ -448,7 +515,7 @@ func _rebuild_city_menu() -> void:
 		return
 	city_menu.clear()
 	if climates.is_empty():
-		city_menu.add_item("（Climate/ 下没有找到 CSV）", 0)
+		city_menu.add_item(UiText.t("（Climate/ 下没有找到 CSV）"), 0)
 		city_menu.set_item_disabled(0, true)
 		return
 	for i in climates.size():
@@ -461,7 +528,7 @@ func _rebuild_speed_menu() -> void:
 		return
 	speed_menu.clear()
 	for i in TIME_SPEEDS.size():
-		speed_menu.add_item(TIME_SPEEDS[i][0], i)
+		speed_menu.add_item(UiText.t(TIME_SPEEDS[i][0]), i)
 		speed_menu.set_item_checked(i, is_equal_approx(time_speed, TIME_SPEEDS[i][1]))
 
 
@@ -494,40 +561,79 @@ func _on_main_menu(id: int) -> void:
 		ID_PREFS:
 			_open_preferences()
 		ID_QUIT:
-			get_tree().quit()
+			_request_quit()
 
 
-var editor_process_pid: int = 0
+func _on_help_menu(id: int) -> void:
+	match id:
+		ID_HELP_GUIDE:
+			help_dialog.popup_centered(HELP_DIALOG_WIDTH)
+		ID_HELP_ABOUT:
+			about_dialog.popup_centered()
+
+
+# —— 设置编辑器（THX 惯例：独立进程）与退出流程 ——
+
+func _editor_running() -> bool:
+	return editor_process_pid > 0 and OS.is_process_running(editor_process_pid)
 
 
 ## 打开设置编辑器（THX 系列惯例：独立进程启动，整窗即编辑器，
 ## 可拖动/缩放/关闭，与游戏主程序互不影响）。
 func _open_settings_editor() -> void:
-	if editor_process_pid > 0 and OS.is_process_running(editor_process_pid):
-		status_label.text = "设置编辑器已在运行（独立窗口）"
+	if _editor_running():
+		status_label.text = UiText.t("设置编辑器已在运行（独立窗口）")
 		return
 	var exe := OS.get_executable_path()
 	var proj := ProjectSettings.globalize_path("res://")
 	editor_process_pid = OS.create_process(exe, ["--path", proj, "res://scenes/editor.tscn"])
 	if editor_process_pid <= 0:
 		editor_process_pid = 0
-		status_label.text = "设置编辑器启动失败"
+		status_label.text = UiText.t("设置编辑器启动失败")
 	else:
-		status_label.text = "已启动设置编辑器（独立窗口）"
+		status_label.text = UiText.t("已启动设置编辑器（独立窗口）")
 
 
 ## 主程序退出时主动击杀自己拉起的编辑器进程——
 ## 是“主程序执行的返回动作”，而不是靠子窗口关系连带关闭（m2.1 批复）。
+## m3.8 批复：强杀前先确认。编辑器把未保存的改动持续存成草稿（user://editor_drafts），
+## 下次启动时询问是否恢复——所以强杀最多丢掉半秒内的输入。
+func _request_quit() -> void:
+	if _editor_running():
+		if not quit_dialog.visible:
+			quit_dialog.popup_centered()
+		return
+	_quit_now()
+
+
+func _quit_now() -> void:
+	_kill_editor_process()
+	get_tree().quit()
+
+
 func _kill_editor_process() -> void:
-	if editor_process_pid > 0 and OS.is_process_running(editor_process_pid):
+	if _editor_running():
 		OS.kill(editor_process_pid)
 	editor_process_pid = 0
 
 
 func _notification(what: int) -> void:
-	if what == NOTIFICATION_WM_CLOSE_REQUEST:
-		_kill_editor_process()
-		get_tree().quit()
+	match what:
+		NOTIFICATION_WM_CLOSE_REQUEST:
+			_request_quit()
+		NOTIFICATION_APPLICATION_FOCUS_IN:
+			_sync_ui_language_from_disk()
+
+
+## 设置编辑器是独立进程，可能在「本地化」页把界面语言改掉了：回到主窗口时对齐一次。
+func _sync_ui_language_from_disk() -> void:
+	if prefs.is_empty():
+		return
+	var lang := str(SettingsStore.load_preferences().get("ui_lang", "zh"))
+	if lang != UiText.language():
+		prefs["ui_lang"] = lang
+		_apply_ui_language()
+		_save_prefs()
 
 
 func _exit_tree() -> void:
@@ -557,14 +663,51 @@ func _on_preference_changed(key: String) -> void:
 			else:
 				_rebuild_city_menu()
 			_save_prefs()
+		"ui_lang":
+			SettingsStore.invalidate_localization_cache()
+			_apply_ui_language()
+			_save_prefs()
 		"city_name_lang":
 			SettingsStore.invalidate_localization_cache()
+			_apply_name_fonts()
 			_rebuild_city_menu()
 			_refresh_day()
 			_save_prefs()
 		"panel_opacity":
 			_apply_panel_opacity()
 			_prefs_save_timer.start()
+
+
+## 切换界面语言：静态文字整体替换 + 动态文字逐处重画。
+func _apply_ui_language() -> void:
+	var lang := str(prefs.get("ui_lang", "zh"))
+	UiText.set_language(lang)
+	UiText.install(self)
+	SettingsStore.apply_ui_font(lang)
+	_fill_menu_texts()
+	_rebuild_speed_menu()
+	_rebuild_city_menu()
+	_build_month_rows()
+	_update_clock()
+	_refresh_month_panel()
+	_refresh_day()
+	_apply_dialog_texts()
+	_apply_name_fonts()
+	if prefs_panel != null:
+		prefs_panel._sync()
+
+
+## 城市名称语言带字体时（虚构语言），显示城市名的几处改用该字体；
+## 字体里没有的字自动回退到界面默认字体。
+func _apply_name_fonts() -> void:
+	var f := SettingsStore.language_font(str(prefs.get("city_name_lang", "zh")))
+	for n in [city_menu, status_label]:
+		if n == null:
+			continue
+		if f != null:
+			n.add_theme_font_override("font", f)   # PopupMenu 是 Window、状态栏是 Control：两者都有这个方法
+		else:
+			n.remove_theme_font_override("font")
 
 
 ## 界面背景不透明度：五个面板的底色 alpha 直接取偏好值（1 = 完全不透明）。
@@ -596,21 +739,17 @@ func _save_prefs() -> void:
 		push_warning("偏好写盘失败（%d）：%s" % [err, SettingsStore.prefs_path()])
 
 
-func _on_help_menu(id: int) -> void:
-	match id:
-		ID_HELP_GUIDE:
-			help_dialog.popup_centered(HELP_DIALOG_WIDTH)
-		ID_HELP_ABOUT:
-			about_dialog.popup_centered()
-
-
 # —— 面板构建 ——
 
 func _build_month_rows() -> void:
+	for c in month_rows.get_children():
+		month_rows.remove_child(c)
+		c.queue_free()
+	month_value_labels.clear()
 	for row in MONTH_ROWS:
 		var hbox := HBoxContainer.new()
 		var key := Label.new()
-		key.text = row[1]
+		key.text = UiText.t(row[1])
 		key.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 		key.add_theme_color_override("font_color", Color(0.60, 0.67, 0.78))
 		var val := Label.new()
@@ -625,23 +764,33 @@ func _build_month_rows() -> void:
 
 func _build_dialogs() -> void:
 	about_dialog = AcceptDialog.new()
-	about_dialog.title = "关于 · 幻想气象局"
-	about_dialog.dialog_text = "幻想气象局 FictForecast\n\n为幻想世界提供一份可靠的天气预报——用于创作，以及向同好炫耀。\n\n版本 0.0.1classic\n月份数据读取 · 日照加权随机 · 日期种子 · 设置编辑器骨架\n（随机评分筛选尚未实装）"
 	help_dialog = AcceptDialog.new()
-	help_dialog.title = "使用说明"
 	# 说明文字很长：限定 680px 宽并自动换行。对话框嵌在主窗口里，宽过主窗口的话右侧会被裁掉。
 	help_dialog.get_label().autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
-	help_dialog.dialog_text = """【数据】
-Climate/ 目录下的每个 CSV 视为一座城市。逐行一个月：12 个月值 + 键名（首列或末列均可，自动识别）+ 注释列（可省略）；月份表头行会被自动跳过。
-已支持键名：平均日高温 / 平均日低温 / 平均日均温 / 平均降水量 / 平均日照时长 / 平均湿度 / 气象记录高温 / 气象记录低温 / 平均降水天数 / 平均降雪天数。其他键（如“气候表现-*”）会被原样保留，供未来扩展。
+	quit_dialog = ConfirmationDialog.new()
+	quit_dialog.confirmed.connect(_quit_now)
+	for d in [about_dialog, help_dialog, quit_dialog]:
+		add_child(d)
+	_apply_dialog_texts()
 
-【当前机制】
-· 随机种子分三层（年/月/日），来自城市所属的世界；同一天永远生成同一份天气。
-· 雨日数量按当月「平均降水天数」锁定；非雨日按日照时长分晴/阴；月降水量与月均温向气候表对账。
-· 高低温在月均值上叠加确定性波动，并被当月气象记录钳制。
-· 顶栏“菜单”里可切换城市、调整时间流速、跳到下一日、恢复现在、打开设置编辑器与偏好设置。
 
-【尚未实装】
-随机评分筛选、气候现象（台风/寒潮等）、世界级气象（水晶雨等）、自定义历法规则。"""
-	add_child(about_dialog)
-	add_child(help_dialog)
+## 三个对话框的文字（切换界面语言时重设）。
+func _apply_dialog_texts() -> void:
+	var version := str(ProjectSettings.get_setting("application/config/version", ""))
+	about_dialog.title = UiText.t("关于 · 幻想气象局")
+	about_dialog.dialog_text = _join(ABOUT_PARAS, version)
+	about_dialog.ok_button_text = UiText.t("确定")
+	help_dialog.title = UiText.t("使用说明")
+	help_dialog.dialog_text = _join(HELP_PARAS, version)
+	help_dialog.ok_button_text = UiText.t("确定")
+	quit_dialog.title = UiText.t("编辑器仍在运行")
+	quit_dialog.dialog_text = UiText.t("设置编辑器还开着。退出主程序会一并关闭它；其中未保存的改动会保留为草稿，下次打开编辑器时可以恢复。")
+	quit_dialog.ok_button_text = UiText.t("仍要退出")
+	quit_dialog.get_cancel_button().text = UiText.t("返回")
+
+
+func _join(paras: Array, version: String) -> String:
+	var out := PackedStringArray()
+	for p in paras:
+		out.append(UiText.f(p, [version]) if p == "版本 %s" else UiText.t(str(p)))
+	return "\n".join(out)
