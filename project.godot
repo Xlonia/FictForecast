@@ -20,9 +20,6 @@ config/icon="res://icon.svg"
 
 window/size/viewport_width=1080
 window/size/viewport_height=640
-; 子窗口嵌在主窗口内（非独立窗口）：偏好设置、关于/说明对话框都留在主窗口里，随主程序关闭。
-; 设置编辑器不受影响——它是独立进程、以自己的主窗口运行。
-window/subwindows/embed_subwindows=true
 window/size/min_window_size=Vector2i(880, 560)
 
 [rendering]

@@ -16,12 +16,66 @@ extends RefCounted
 ## world 字段为本次新增的骨架决定（城市归属哪个世界，文档未明列但结构上必需）。
 ## zh 是显示名的基准语言：其它语言缺条目时回退到 zh（编辑器里录入的名字）。
 
-const WORLDS_DIR := "res://Worlds"
-const CITIES_DIR := "res://Cities"
-const LOC_DIR := "res://Localization"
-const LOC_FILE := "res://Localization/zh.yaml"
 const DEFAULT_LANG := "zh"
 const THEME_PATH := "res://theme/main_theme.tres"
+
+# ———————— 数据根（m3.11 批复：导出版数据外置）——————
+## 运行期解析的数据根目录（Climate/Worlds/Cities/Localization/Maps 都挂在它下面）：
+##   1. 命令行 --data-dir=<路径>（最高优先，打包/多存档场景）
+##   2. 环境变量 FF_DATA_DIR（开发/测试钩子）
+##   3. 开发环境（工程内跑，OS.has_feature("editor")）→ res://，行为与 0.0.1 完全一致
+##   4. 导出版 → exe 同级的 data/（package_export.py 把数据复制到那里；pck 里不带数据）
+## 注意：代码/场景/主题仍在 pck 里（导出后只读）——可改的只有 data/ 下的数据。
+static var _data_root := ""  # 计算缓存（默认根只算一次；env/参数每次都查，方便测试覆盖）
+
+
+static func data_root() -> String:
+	for arg in OS.get_cmdline_user_args():
+		if arg.begins_with("--data-dir="):
+			return arg.substr("--data-dir=".length())
+	var env := OS.get_environment("FF_DATA_DIR")
+	if not env.is_empty():
+		return env
+	if _data_root.is_empty():
+		_data_root = "res://" if OS.has_feature("editor") \
+				else OS.get_executable_path().get_base_dir().path_join("data")
+	return _data_root
+
+
+static func worlds_dir() -> String:
+	return data_root().path_join("Worlds")
+
+
+static func cities_dir() -> String:
+	return data_root().path_join("Cities")
+
+
+static func climate_dir() -> String:
+	return data_root().path_join("Climate")
+
+
+static func maps_dir() -> String:
+	return data_root().path_join("Maps")
+
+
+static func loc_dir() -> String:
+	return data_root().path_join("Localization")
+
+
+static func loc_file() -> String:
+	return loc_dir().path_join("zh.yaml")
+
+
+## res:// 开头的数据路径 → 数据根下的真实文件（导出版数据外置后，老配置里的
+## "res://Maps/..." 依然指向 data/Maps/...）；其余原样返回。
+static func resolve_media_path(path: String) -> String:
+	return data_root().path_join(path.substr("res://".length())) if path.begins_with("res://") else path
+
+
+## 转成操作系统绝对路径（FileAccess/DirAccess/copy 等需要真路径的场景；
+## res:// 与 user:// 走引擎翻译，其余原样）。
+static func os_path(path: String) -> String:
+	return ProjectSettings.globalize_path(path) if path.begins_with("res://") or path.begins_with("user://") else path
 
 const WORLD_DEFAULTS := {
 	"seed": "",
@@ -164,16 +218,16 @@ static func save_preferences(data: Dictionary) -> Error:
 
 ## 创建目录与默认文件（已存在则不覆盖）。
 static func ensure_defaults() -> void:
-	DirAccess.make_dir_recursive_absolute(WORLDS_DIR)
-	DirAccess.make_dir_recursive_absolute(CITIES_DIR)
-	DirAccess.make_dir_recursive_absolute(LOC_FILE.get_base_dir())
-	if not FileAccess.file_exists(WORLDS_DIR.path_join("default.json")):
+	DirAccess.make_dir_recursive_absolute(worlds_dir())
+	DirAccess.make_dir_recursive_absolute(cities_dir())
+	DirAccess.make_dir_recursive_absolute(loc_file().get_base_dir())
+	if not FileAccess.file_exists(worlds_dir().path_join("default.json")):
 		save_world("default", {
 			"seed": "",
 			"base_times": [{"id": "utc", "offset_minutes": 0}],
 			"base_dates": [{"id": "gregorian", "offset_days": 0}],
 		})
-	if not FileAccess.file_exists(LOC_FILE):
+	if not FileAccess.file_exists(loc_file()):
 		var cities := {}
 		for id in list_city_ids():
 			cities[id] = id.capitalize()
@@ -182,7 +236,7 @@ static func ensure_defaults() -> void:
 
 static func list_city_ids() -> Array[String]:
 	var ids: Array[String] = []
-	var dir := DirAccess.open("res://Climate")
+	var dir := DirAccess.open(climate_dir())
 	if dir != null:
 		for f in dir.get_files():
 			if f.get_extension().to_lower() == "csv":
@@ -193,7 +247,7 @@ static func list_city_ids() -> Array[String]:
 
 static func list_world_ids() -> Array[String]:
 	var ids: Array[String] = []
-	var dir := DirAccess.open(WORLDS_DIR)
+	var dir := DirAccess.open(worlds_dir())
 	if dir != null:
 		for f in dir.get_files():
 			if f.get_extension().to_lower() == "json" and not f.ends_with(".phenomena.json"):
@@ -203,15 +257,15 @@ static func list_world_ids() -> Array[String]:
 
 
 static func load_world(id: String) -> Dictionary:
-	return _load_json(WORLDS_DIR.path_join(id + ".json"), WORLD_DEFAULTS)
+	return _load_json(worlds_dir().path_join(id + ".json"), WORLD_DEFAULTS)
 
 
 static func save_world(id: String, data: Dictionary) -> Error:
-	return _save_json(WORLDS_DIR.path_join(id + ".json"), data)
+	return _save_json(worlds_dir().path_join(id + ".json"), data)
 
 
 static func load_city(id: String) -> Dictionary:
-	var path := CITIES_DIR.path_join(id + ".json")
+	var path := cities_dir().path_join(id + ".json")
 	var out := _load_json(path, CITY_DEFAULTS)
 	# 迁移：m3.8 之前的城市文件没有 anchor 字段——**旧文件**按“经纬度为准”理解（用户当年填的
 	# 经纬度就是数据本体）；只有**没有文件的新城市**才用新默认（锚定图上位置，收官批复）。
@@ -224,7 +278,7 @@ static func load_city(id: String) -> Dictionary:
 
 
 static func save_city(id: String, data: Dictionary) -> Error:
-	return _save_json(CITIES_DIR.path_join(id + ".json"), data)
+	return _save_json(cities_dir().path_join(id + ".json"), data)
 
 
 # ———————— 编辑器单实例锁 ————————
@@ -267,7 +321,7 @@ const PHENOMENA_DEFAULTS := {"phenomena": []}
 
 
 static func phenomena_path(world_id: String) -> String:
-	return WORLDS_DIR.path_join(world_id + ".phenomena.json")
+	return worlds_dir().path_join(world_id + ".phenomena.json")
 
 
 static func load_phenomena(world_id: String) -> Dictionary:
@@ -284,11 +338,11 @@ static func save_phenomena(world_id: String, data: Dictionary) -> Error:
 
 
 static func load_localization() -> Dictionary:
-	return load_localization_file(LOC_FILE)
+	return load_localization_file(loc_file())
 
 
 static func save_localization(data: Dictionary) -> Error:
-	return save_localization_file(LOC_FILE, data)
+	return save_localization_file(loc_file(), data)
 
 
 ## 多语言支持（m3 批复：本地化界面每语言一个子页签）——
@@ -296,7 +350,7 @@ static func save_localization(data: Dictionary) -> Error:
 ## 有文本（.yaml）或有语言定义（.json）都算一种语言。
 static func list_languages() -> Array[String]:
 	var langs: Array[String] = []
-	var dir := DirAccess.open(LOC_DIR)
+	var dir := DirAccess.open(loc_dir())
 	if dir != null:
 		for f in dir.get_files():
 			var ext := f.get_extension().to_lower()
@@ -311,7 +365,7 @@ static func list_languages() -> Array[String]:
 
 
 static func loc_path(lang: String) -> String:
-	return LOC_DIR.path_join(lang + ".yaml")
+	return loc_dir().path_join(lang + ".yaml")
 
 
 static func load_localization_file(path: String) -> Dictionary:
@@ -343,7 +397,7 @@ static func invalidate_localization_cache() -> void:
 # ———————— 语言定义（Localization/<语言代码>.json：名字 + 字体）———————
 
 static func language_def_path(lang: String) -> String:
-	return LOC_DIR.path_join(lang + ".json")
+	return loc_dir().path_join(lang + ".json")
 
 
 static func load_language_def(lang: String) -> Dictionary:
@@ -378,13 +432,21 @@ static func language_font(lang: String) -> Font:
 	var path := str(load_language_def(lang).get("font", "")).strip_edges()
 	if path.is_empty():
 		return null
-	if _font_cache.has(path):
-		return _font_cache[path]
-	var abs_path := path
-	if path.is_absolute_path():
-		abs_path = ProjectSettings.globalize_path(path)  # res://、user:// 与绝对路径都能转
-	else:
-		abs_path = ProjectSettings.globalize_path("res://").path_join(path)
+	var res_path := path if path.begins_with("res://") else ("res://" + path if not path.is_absolute_path() else path)
+	# res:// 的字体走资源系统（pck 里的导入字体，开发与导出都能 load）；
+	# duplicate 后挂回退链——导入资源是全局共享的，不能就地改它；
+	# 绝对路径/数据根下的散字体走文件加载（load_dynamic_font 需要真实 OS 路径）。
+	if res_path.begins_with("res://"):
+		var loaded := load(res_path)
+		if loaded is Font:
+			var inst: FontFile = (loaded as FontFile).duplicate()
+			inst.fallbacks = [default_font()]
+			_font_cache[path] = inst
+			return inst
+	var abs_path := os_path(resolve_media_path(path))
+	if abs_path.is_empty() or not FileAccess.file_exists(abs_path):
+		_font_cache[path] = null
+		return null
 	var f := FontFile.new()
 	var err := f.load_dynamic_font(abs_path)
 	if err != OK:

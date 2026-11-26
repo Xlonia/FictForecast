@@ -13,7 +13,7 @@ extends Control
 ## 开发辅助环境变量：FF_TIME_SCALE（时间流速）、FF_FORCE_SKY（强制天气型）、
 ## FF_OPEN_EDITOR（启动即开编辑器）、FF_PREFS_FILE（重定向偏好文件，测试时不污染真实偏好）。
 
-const DATA_DIR := "res://Climate"
+const DATA_DIR := "res://Climate"  # [m3.11 弃用] 数据根改由 SettingsStore.climate_dir() 运行期解析
 
 const ID_RELOAD := 100
 const ID_NEXT_DAY := 101
@@ -164,6 +164,11 @@ var editor_process_pid: int = 0
 
 
 func _ready() -> void:
+	# 导出版编辑器（m3.11 批复）：导出环境 spawn 的子进程带 --ff-editor 进入“本进程即编辑器”模式——
+	# 直接切换场景，不再走主界面初始化，也不会再 spawn（无递归）；开发环境仍走 --path 独立进程。
+	if OS.get_cmdline_user_args().has("--ff-editor"):
+		get_tree().change_scene_to_file.call_deferred("res://scenes/editor.tscn")
+		return
 	SettingsStore.ensure_defaults()
 	prefs = SettingsStore.load_preferences()
 	# 界面语言：先登记场景里的静态文字（必须在任何代码改写它们之前），再换成当前语言
@@ -311,12 +316,12 @@ func _reload_climates() -> void:
 	var kept := climate
 	SettingsStore.invalidate_localization_cache()  # 编辑器是独立进程，可能改过本地化文件
 	climates.clear()
-	var dir := DirAccess.open(DATA_DIR)
+	var dir := DirAccess.open(SettingsStore.climate_dir())
 	if dir != null:
 		for fname in dir.get_files():
 			if fname.get_extension().to_lower() != "csv":
 				continue
-			var cd := ClimateData.load_from_file(DATA_DIR.path_join(fname))
+			var cd := ClimateData.load_from_file(SettingsStore.climate_dir().path_join(fname))
 			if cd != null:
 				climates.append(cd)
 	climates.sort_custom(func(a, b): return a.city_name.naturalnocasecmp_to(b.city_name) < 0)
@@ -590,15 +595,19 @@ func _editor_running() -> bool:
 	return editor_process_pid > 0 and OS.is_process_running(editor_process_pid)
 
 
-## 打开设置编辑器（THX 系列惯例：独立进程启动，整窗即编辑器，
-## 可拖动/缩放/关闭，与游戏主程序互不影响）。
+## 打开设置编辑器（THX 惯例：独立进程）。开发环境带 --path 开编辑器场景；
+## 导出版没有工程目录：spawn 自身并带 --ff-editor，让子进程自己变成编辑器（见 _ready 顶部）。
 func _open_settings_editor() -> void:
 	if _editor_running():
 		status_label.text = UiText.t("设置编辑器已在运行（独立窗口）")
 		return
 	var exe := OS.get_executable_path()
-	var proj := ProjectSettings.globalize_path("res://")
-	editor_process_pid = OS.create_process(exe, ["--path", proj, "res://scenes/editor.tscn"])
+	var args: PackedStringArray
+	if OS.has_feature("editor"):
+		args = PackedStringArray(["--path", ProjectSettings.globalize_path("res://"), "res://scenes/editor.tscn"])
+	else:
+		args = PackedStringArray(["--", "--ff-editor"])
+	editor_process_pid = OS.create_process(exe, args)
 	if editor_process_pid <= 0:
 		editor_process_pid = 0
 		status_label.text = UiText.t("设置编辑器启动失败")

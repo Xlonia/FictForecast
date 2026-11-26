@@ -111,7 +111,7 @@ func _init() -> void:
 	_check(str(SettingsStore.PREFS_DEFAULTS.get("ui_lang", "")) == "zh", "偏好骨架含界面语言 ui_lang")
 	# 世界 JSON 回写测试：只写**临时世界文件**，用后即删——自检不得改写用户的真实数据
 	var tw := "__selftest_world__"
-	var tw_path := SettingsStore.WORLDS_DIR.path_join(tw + ".json")
+	var tw_path := SettingsStore.worlds_dir().path_join(tw + ".json")
 	_check(not FileAccess.file_exists(tw_path), "测试世界文件事先不存在（否则上次自检中途失败）")
 	var w: Dictionary = SettingsStore.load_world("__no_such_world__")
 	w["seed"] = "selftest"
@@ -350,7 +350,7 @@ func _init() -> void:
 	# —— 17. m3.9 收官：城市锚定迁移 / 单实例锁 ——
 	_check(str(SettingsStore.load_city("__no_such_city__").get("anchor", "")) == "map",
 			"新城市（无文件）默认锚定图上位置（收官批复）")
-	var legacy_path := SettingsStore.CITIES_DIR.path_join("__selftest_city__.json")
+	var legacy_path := SettingsStore.cities_dir().path_join("__selftest_city__.json")
 	SettingsStore._save_json(legacy_path, {"world": "Novera", "lati": 1.0, "long": 2.0})  # 旧式：无 anchor
 	_check(str(SettingsStore.load_city("__selftest_city__").get("anchor", "")) == "latlong",
 			"旧城市文件缺 anchor → 迁移为经纬度锁定（不挪老城市）")
@@ -379,12 +379,32 @@ func _init() -> void:
 	_check(SettingsStore.fallback_chain("xni").size() == 2, "自定义/虚构语言只回退 zh（不进类链）")
 	_check(SettingsStore.city_display_name("myksolonia", "ko") == SettingsStore.city_display_name("myksolonia", "zh"),
 			"汉字类留空被汉语替补（ko → %s）" % SettingsStore.city_display_name("myksolonia", "ko"))
-	_check(SettingsStore.city_display_name("myksolonia", "de") == SettingsStore.city_display_name("myksolonia", "en"),
-			"拉丁类留空沿批复顺序替补（de → %s）" % SettingsStore.city_display_name("myksolonia", "de"))
+	# 链上第一个非空值 = 查询结果（不预设具体译文：用户可能在编辑器里已填某些语言）
+	var de_expect := ""
+	for code in SettingsStore.fallback_chain("de"):
+		de_expect = SettingsStore._loc_lookup("cities", "myksolonia", code)
+		if not de_expect.is_empty():
+			break
+	_check(SettingsStore.city_display_name("myksolonia", "de") == de_expect and not de_expect.is_empty(),
+			"拉丁类按链序取第一个非空值（de → %s）" % de_expect)
 	_check(SettingsStore.world_display_name("Novera", "fr") == SettingsStore.world_display_name("Novera", "en"),
 			"世界名走同类回退链（fr → %s）" % SettingsStore.world_display_name("Novera", "fr"))
 	_check(SettingsStore.city_display_name("myksolonia", "hi") == SettingsStore.city_display_name("myksolonia", "zh"),
 			"未归类语言（hi）回退 zh")
+
+	# —— 19. m3.11 数据根（导出版数据外置）——
+	_check(SettingsStore.data_root() == "res://", "开发环境数据根 = res://（实际 %s）" % SettingsStore.data_root())
+	_check(SettingsStore.climate_dir().ends_with("/Climate") or SettingsStore.climate_dir().ends_with("\\Climate"),
+			"气候目录挂在数据根下：%s" % SettingsStore.climate_dir())
+	_check(SettingsStore.os_path("res://Worlds") != "res://Worlds", "os_path 把 res:// 翻译成真实路径")
+	_check(SettingsStore.resolve_media_path("res://Maps/x.png").ends_with("Maps/x.png"),
+			"res:// 媒体路径按数据根解析")
+	_check(SettingsStore.resolve_media_path("D:/x.png") == "D:/x.png", "绝对路径原样返回")
+	OS.set_environment("FF_DATA_DIR", "D:/ff_probe_data")
+	_check(SettingsStore.data_root() == "D:/ff_probe_data", "FF_DATA_DIR 覆盖数据根")
+	_check(SettingsStore.climate_dir() == "D:/ff_probe_data/Climate", "覆盖后的气候目录")
+	OS.set_environment("FF_DATA_DIR", "")
+	_check(SettingsStore.data_root() == "res://", "移除覆盖后恢复默认")
 	_finish()
 
 

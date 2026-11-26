@@ -1,10 +1,10 @@
 cities:
-  lioepprosia: 洛沅
-  myksolonia: 瑰流
+  lioepprosia: 洛源
+  myksolonia: 綾流
 
 worlds:
   default: 現実世界
-  Novera: Novera
+  Novera: ノヴェラ
 
 ui:
   %.1f 天: %.1f 日

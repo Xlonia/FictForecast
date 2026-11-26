@@ -2124,8 +2124,8 @@ func _load_map_texture(path: String) -> void:
 	map_texture = null
 	if path.is_empty():
 		return
-	# res:// 相对路径（导入复制的图）也能加载
-	var abs_path := ProjectSettings.globalize_path(path) if not path.is_absolute_path() else path
+	# res:// 数据路径按数据根解析（导出版里 "res://Maps/x" 就是 data/Maps/x），再转 OS 路径
+	var abs_path := SettingsStore.os_path(SettingsStore.resolve_media_path(path))
 	var img := Image.load_from_file(abs_path)
 	if img == null or img.is_empty():
 		_set_status(UiText.f("参考图加载失败：%s", [path]))
@@ -2190,11 +2190,11 @@ func _on_map_file(path: String) -> void:
 	# 导入设置（收官批复）：复制一份进工程 Maps/<世界ID>/，存相对路径——世界文件夹整体拷走即可分享
 	var stored := path
 	if _map_import_copy:
-		var dir := ProjectSettings.globalize_path("res://Maps").path_join(current_world_id)
+		var dir := SettingsStore.os_path(SettingsStore.maps_dir()).path_join(current_world_id)
 		DirAccess.make_dir_recursive_absolute(dir)
 		var dst := dir.path_join(path.get_file())
-		if path == dst:
-			stored = path  # 选的本来就是工程里的这份
+		if SettingsStore.os_path(path) == dst:
+			stored = path  # 选的本来就是数据根里的这份
 		elif DirAccess.copy_absolute(path, dst) == OK:
 			stored = "res://Maps/%s/%s" % [current_world_id, path.get_file()]
 		else:
@@ -2663,20 +2663,20 @@ func _on_city_export(dir: String) -> void:
 		return
 	var root_dir := dir.path_join(id)
 	var ok := true
-	var csv_src := ProjectSettings.globalize_path("res://Climate").path_join(id + ".csv")
+	var csv_src := SettingsStore.os_path(SettingsStore.climate_dir()).path_join(id + ".csv")
 	ok = _copy_file(csv_src, root_dir.path_join("Climate").path_join(id + ".csv")) and ok
-	ok = _copy_file(ProjectSettings.globalize_path(SettingsStore.CITIES_DIR.path_join(id + ".json")),
+	ok = _copy_file(SettingsStore.os_path(SettingsStore.cities_dir()).path_join(id + ".json"),
 			root_dir.path_join("Cities").path_join(id + ".json")) and ok
 	var wid := str(current_city.get("world", ""))
 	if wid != "" and world_ids.has(wid):
-		ok = _copy_file(ProjectSettings.globalize_path(SettingsStore.WORLDS_DIR.path_join(wid + ".json")),
+		ok = _copy_file(SettingsStore.os_path(SettingsStore.worlds_dir()).path_join(wid + ".json"),
 				root_dir.path_join("Worlds").path_join(wid + ".json")) and ok
-		var phen := SettingsStore.WORLDS_DIR.path_join(wid + ".phenomena.json")
+		var phen := SettingsStore.phenomena_path(wid)
 		if FileAccess.file_exists(phen):
-			ok = _copy_file(ProjectSettings.globalize_path(phen),
+			ok = _copy_file(SettingsStore.os_path(phen),
 					root_dir.path_join("Worlds").path_join(wid + ".phenomena.json")) and ok
-		# 工程内 Maps/<世界>/ 的参考图（导入复制的图存的是相对路径，必须一起走）
-		var map_dir := ProjectSettings.globalize_path("res://Maps").path_join(wid)
+		# 数据根 Maps/<世界>/ 的参考图（导入复制的图存的是相对路径，必须一起走）
+		var map_dir := SettingsStore.os_path(SettingsStore.maps_dir()).path_join(wid)
 		if DirAccess.dir_exists_absolute(map_dir):
 			var msrc := DirAccess.open(map_dir)
 			if msrc != null:
@@ -2684,12 +2684,12 @@ func _on_city_export(dir: String) -> void:
 					ok = _copy_file(map_dir.path_join(str(f)),
 							root_dir.path_join("Maps").path_join(wid).path_join(str(f))) and ok
 	# 语言文件全带走：标准预设 + 自定义/虚构语言（对方目录里同名文件由用户自行合并/取舍）
-	var loc_dir := ProjectSettings.globalize_path(SettingsStore.LOC_DIR)
-	var lsrc := DirAccess.open(loc_dir)
+	var loc_src := SettingsStore.os_path(SettingsStore.loc_dir())
+	var lsrc := DirAccess.open(loc_src)
 	if lsrc != null:
 		for f in lsrc.get_files():
 			if str(f).ends_with(".yaml") or str(f).ends_with(".json"):
-				ok = _copy_file(loc_dir.path_join(str(f)),
+				ok = _copy_file(loc_src.path_join(str(f)),
 						root_dir.path_join("Localization").path_join(str(f))) and ok
 	if ok:
 		_set_status(UiText.f("城市已导出到：%s（含地名 yaml，整个文件夹拷给对方即可）", [root_dir]))
