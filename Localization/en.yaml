@@ -123,7 +123,7 @@ ui:
   天: d
   字体 font（留空 = 不覆盖）: Font (empty = keep default)
   字体文件路径，如 fictlanguages/fonts/xxx.ttf: Font file path, e.g. fictlanguages/fonts/xxx.ttf
-  字体预览：0123 ABC 洛沅: Font preview: 0123 ABC Luoyuan
+  字体预览：0123 ABC ქართული: Font preview: 0123 ABC ქართული
   季节窗口（月）: Season window (months)
   它们已按原样载入（仍标记为未保存）。要保留吗？: They are loaded as-is (still marked unsaved). Keep them?
   对应 Climate/<ID>.csv: Backed by Climate/<ID>.csv
@@ -320,3 +320,4 @@ ui:
   ＋ 添加基准时间: + Add base time
   ＋ 添加壁纸系列: + Add wallpaper set
   ＋ 添加气象效果: + Add weather effect
+  ⚠ 数据目录不可写：%s（改动无法保存）——请把数据移到可写位置，或用 --data-dir=<路径> 指定: ⚠ Data directory is not writable: %s (changes cannot be saved) — move the data to a writable location or pass --data-dir=<path>

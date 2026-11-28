@@ -876,7 +876,7 @@ text = "浏览…"
 layout_mode = 2
 theme_override_colors/font_color = Color(0.55, 0.62, 0.72, 1)
 theme_override_font_sizes/font_size = 13
-text = "字体预览：0123 ABC 洛沅"
+text = "字体预览：0123 ABC ქართული"
 
 [node name="LocTop" type="HBoxContainer" parent="Root/Column/Tabs/LocTab"]
 layout_mode = 2

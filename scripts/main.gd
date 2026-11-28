@@ -448,11 +448,14 @@ func _update_status() -> void:
 	if str(cd.world) != "":
 		var wd := SettingsStore.world_display_name(str(cd.world))
 		world_shown = str(cd.world) if wd.is_empty() else wd
+	var data_warn := ""
+	if not SettingsStore.data_writable():
+		data_warn = "　" + UiText.f("⚠ 数据目录不可写：%s（改动无法保存）——请把数据移到可写位置，或用 --data-dir=<路径> 指定", [SettingsStore.data_root()])
 	status_label.text = UiText.f("城市：%s（%.1f°, %.1f°, %.0fm · 世界 %s · 历法 %s · 时间系统 %s · 时区 %+d 分）　·　数据：%s　·　机制：三层种子 + 月度确定性生成（雨日锁定/降水对账/距平零和/露点中介）%s%s", [
 		_city_label(climate.city_name), float(cd.long), float(cd.lati), float(cd.alti),
 		world_shown, UiText.t(str(ctx["cal_id"])), UiText.t(str(ctx["times_id"])), int(cd.timez),
 		climate.source_path.get_file(), extra, skipped,
-	])
+	]) + data_warn
 
 
 func _sky_bg_color() -> Color:

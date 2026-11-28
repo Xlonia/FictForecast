@@ -88,11 +88,11 @@ func _init() -> void:
 	print("全年分布：晴 %d / 阴 %d / 雨 %d" % [counts[0], counts[1], counts[2]])
 
 	# —— 8. MiniYaml 与设置存取 ——
-	var yaml_data := {"cities": {"myksolonia": "瑰流", "quoted": "带\"引号"},
+	var yaml_data := {"cities": {"myksolonia": "样例名", "quoted": "带\"引号"},
 			"ui": {"关闭": "Close", "res://x": "带冒号的键"}}
 	var yaml_back := MiniYaml.parse(MiniYaml.dumps(yaml_data))
 	_check(yaml_back.errors.is_empty(), "MiniYaml 序列化可回读且无错误")
-	_check(yaml_back.data.get("cities", {}).get("myksolonia", "") == "瑰流", "MiniYaml 回读中文值")
+	_check(yaml_back.data.get("cities", {}).get("myksolonia", "") == "样例名", "MiniYaml 回读中文值")
 	_check(yaml_back.data.get("ui", {}).get("res://x", "") == "带冒号的键",
 			"键里的冒号（后不跟空格）不当作分隔符")
 	var yaml_parse2 := MiniYaml.parse("# 注释行\nworlds:\n  default: 现实世界\n")
@@ -405,6 +405,10 @@ func _init() -> void:
 	_check(SettingsStore.climate_dir() == "D:/ff_probe_data/Climate", "覆盖后的气候目录")
 	OS.set_environment("FF_DATA_DIR", "")
 	_check(SettingsStore.data_root() == "res://", "移除覆盖后恢复默认")
+	_check(SettingsStore.data_writable(), "开发环境数据根可写")
+	OS.set_environment("FF_DATA_DIR", "res://icon.svg/subdir")  # 路径穿过一个文件 → 写探针必败
+	_check(not SettingsStore.data_writable(), "不可写的数据根能被检出（m3.12 批复）")
+	OS.set_environment("FF_DATA_DIR", "")
 	_finish()
 
 

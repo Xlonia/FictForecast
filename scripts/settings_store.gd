@@ -77,6 +77,19 @@ static func resolve_media_path(path: String) -> String:
 static func os_path(path: String) -> String:
 	return ProjectSettings.globalize_path(path) if path.begins_with("res://") or path.begins_with("user://") else path
 
+
+## 数据目录可写性（m3.12 批复）：写删一个探针文件实测。不缓存结果——
+## 状态栏每次刷新都重测（代价是一次小文件读写，只在低频路径调用）。
+static func data_writable() -> bool:
+	var probe := data_root().path_join(".write_probe")
+	var f := FileAccess.open(probe, FileAccess.WRITE)
+	if f == null:
+		return false
+	f.store_string("ok")
+	f.close()
+	DirAccess.remove_absolute(probe)
+	return true
+
 const WORLD_DEFAULTS := {
 	"seed": "",
 	"base_times": [],  # [{ "id": String, "offset_minutes": int }] 基准时间（时区偏差分钟，投射到 0° 经线）

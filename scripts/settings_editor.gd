@@ -1172,7 +1172,7 @@ func _on_loc_font_browse() -> void:
 
 ## 字体预览：用该语言的字体渲染（字体里没有的字回退到界面默认字体）。
 func _update_loc_preview() -> void:
-	loc_preview.text = UiText.t("字体预览：0123 ABC 洛沅")
+	loc_preview.text = UiText.t("字体预览：0123 ABC ქართული")
 	var path := str(_loc_def.get("font", ""))
 	var f := SettingsStore.language_font(_loc_lang)
 	if f != null:
@@ -1302,9 +1302,13 @@ func _on_save() -> void:
 
 
 ## 把一份文档落盘：快照更新为已保存状态，清出暂存区。城市靠图上位置定位时先换算经纬度。
+## 数据目录不可写时直接拒绝（m3.12 批复：装进受保护位置时给出明确出路而不是静默失败）。
 func _save_key(key: String) -> bool:
 	var data := _doc_data(key)
 	if data.is_empty():
+		return false
+	if not SettingsStore.data_writable():
+		_set_status(UiText.f("⚠ 数据目录不可写：%s（改动无法保存）——请把数据移到可写位置，或用 --data-dir=<路径> 指定", [SettingsStore.data_root()]))
 		return false
 	if _kind(key) == "city":
 		_prepare_city_doc(data)
@@ -2623,6 +2627,9 @@ func _place_city_at(id: String, uv: Vector2) -> void:
 	if uv.y < 0.0 or uv.y > 1.0:
 		_set_status(UiText.t("请点在参考图的上下缘之间"))
 		return
+	if not SettingsStore.data_writable():
+		_set_status(UiText.f("⚠ 数据目录不可写：%s（改动无法保存）——请把数据移到可写位置，或用 --data-dir=<路径> 指定", [SettingsStore.data_root()]))
+		return
 	var cfg := _map_cfg()
 	var cd := SettingsStore.load_city(id)
 	cd["anchor"] = ANCHOR_MAP
@@ -2745,7 +2752,9 @@ func _set_status(text: String) -> void:
 	_apply_status()
 
 
-## 状态栏 = 最近一条状态 + 脏标记（草稿快照机制）。
+## 状态栏 = 最近一条状态 + 脏标记（草稿快照机制）+ 数据目录可写性（m3.12 批复）。
 func _apply_status() -> void:
 	var n := _dirty_keys().size()
 	status_label.text = _status_text + ("　" + UiText.f("●　有 %d 处未保存改动（关闭时会询问处理）", [n]) if n > 0 else "")
+	if not SettingsStore.data_writable():
+		status_label.text += "　" + UiText.f("⚠ 数据目录不可写：%s（改动无法保存）——请把数据移到可写位置，或用 --data-dir=<路径> 指定", [SettingsStore.data_root()])
