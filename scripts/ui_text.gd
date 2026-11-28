@@ -42,10 +42,9 @@ static func set_language(lang: String) -> void:
 				_table[k] = v
 
 
-## 取某个语言文件 ui 组的可写副本。
+## 取某个语言**生效**的 ui 组（散文件 + 内容包键级合并；界面译文也可能来自 .ffw 包）。
 static func _group_of(lang: String) -> Dictionary:
-	var res := SettingsStore.load_localization_file(SettingsStore.loc_path(lang))
-	var g = res.data.get(GROUP, {})
+	var g = SettingsStore.load_language_merged(lang).get(GROUP, {})
 	return (g as Dictionary).duplicate() if typeof(g) == TYPE_DICTIONARY else {}
 
 

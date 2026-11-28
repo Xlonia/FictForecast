@@ -76,6 +76,8 @@ var _form_syncing := false          # 表单回填期间屏蔽控件回写
 # —— 城市页 ——
 @onready var city_pick: OptionButton = $Root/Column/Tabs/CityTab/Top/CityPick
 @onready var city_export_btn: Button = $Root/Column/Tabs/CityTab/Top/ExportBtn
+@onready var ffw_export_btn: Button = $Root/Column/Tabs/CityTab/Top/FfwExportBtn
+@onready var ffw_import_btn: Button = $Root/Column/Tabs/CityTab/Top/FfwImportBtn
 @onready var world_ref_pick: OptionButton = $Root/Column/Tabs/CityTab/Scroll/Form/WorldRow/WorldRefPick
 @onready var name_edit: LineEdit = $Root/Column/Tabs/CityTab/Scroll/Form/NameRow/NameEdit
 @onready var long_spin: SpinBox = $Root/Column/Tabs/CityTab/Scroll/Form/GeoRow/LongSpin
@@ -150,6 +152,8 @@ var _map_drag_offset := Vector2.ZERO
 @onready var loc_add_btn: Button = $Root/Column/Tabs/LocTab/LocAdd/LocAddBtn
 var _font_dialog: FileDialog
 var _export_dialog: FileDialog
+var _ffw_export_dialog: FileDialog   # 导出 .ffw 内容包（保存文件模式）
+var _ffw_import_dialog: FileDialog   # 导入 .ffw 内容包（拷进 data/ffmods/）
 
 # —— 世界页参数（m2：波动/现象分布；m2.1 批复隐藏两项超前参数，见下方注释）——
 # [m2.1 隐藏·下版本可能启用] 日照/昼夜模型实装时恢复这两个控件（tscn 中也已注释）
@@ -1318,6 +1322,10 @@ func _save_key(key: String) -> bool:
 		return false
 	_snapshots[key] = data.duplicate(true)
 	_stash.erase(key)
+	# 内容包覆盖提示（m3.13）：包里有同名文件时，读取以包为准——散文件的这次保存会被遮住
+	var shield := FfwPacks.winner_for(_doc_rel(key))
+	if shield != "":
+		_set_status(UiText.f("已保存到 data/，但内容包 %s 覆盖了同一文件（读取以包为准）", [shield.get_file()]))
 	return true
 
 
@@ -2038,11 +2046,34 @@ func _build_map_tab() -> void:
 	_export_dialog.title = UiText.t("选择导出文件夹")
 	_export_dialog.dir_selected.connect(_on_city_export)
 	add_child(_export_dialog)
+	# .ffw 内容包（m3.13 批复）：导出选定内容为单文件包 / 导入包进 data/ffmods/
+	_ffw_export_dialog = FileDialog.new()
+	_ffw_export_dialog.file_mode = FileDialog.FILE_MODE_SAVE_FILE
+	_ffw_export_dialog.access = FileDialog.ACCESS_FILESYSTEM
+	_ffw_export_dialog.title = UiText.t("导出内容包 (.ffw)")
+	_ffw_export_dialog.filters = PackedStringArray([UiText.t("*.ffw ; 内容包 (.ffw)")])
+	_ffw_export_dialog.file_selected.connect(_on_city_export_ffw)
+	add_child(_ffw_export_dialog)
+	_ffw_import_dialog = FileDialog.new()
+	_ffw_import_dialog.file_mode = FileDialog.FILE_MODE_OPEN_FILE
+	_ffw_import_dialog.access = FileDialog.ACCESS_FILESYSTEM
+	_ffw_import_dialog.title = UiText.t("导入内容包 (.ffw)")
+	_ffw_import_dialog.filters = PackedStringArray([UiText.t("*.ffw ; 内容包 (.ffw)")])
+	_ffw_import_dialog.file_selected.connect(_on_ffw_import)
+	add_child(_ffw_import_dialog)
 	city_export_btn.pressed.connect(func() -> void:
 		if current_city_id.is_empty():
 			_set_status(UiText.t("请先选择要导出的城市"))
 			return
 		_export_dialog.popup_centered(Vector2i(820, 560)))
+	ffw_export_btn.pressed.connect(func() -> void:
+		if current_city_id.is_empty():
+			_set_status(UiText.t("请先选择要导出的城市"))
+			return
+		_ffw_export_dialog.current_file = current_city_id + ".ffw"
+		_ffw_export_dialog.popup_centered(Vector2i(820, 560)))
+	ffw_import_btn.pressed.connect(func() -> void:
+		_ffw_import_dialog.popup_centered(Vector2i(820, 560)))
 	# 开发辅助：FF_MAP_IMAGE=<图片路径> 启动时自动加载参考图
 	var env_map := OS.get_environment("FF_MAP_IMAGE")
 	if not env_map.is_empty():
@@ -2702,6 +2733,109 @@ func _on_city_export(dir: String) -> void:
 		_set_status(UiText.f("城市已导出到：%s（含地名 yaml，整个文件夹拷给对方即可）", [root_dir]))
 	else:
 		_set_status(UiText.f("导出完成但有文件失败，见状态记录：%s", [root_dir]))
+
+
+# ———————— .ffw 内容包（m3.13 批复）——————
+
+## 当前城市文档 key 对应的数据根相对路径（保存后查覆盖用）。
+func _doc_rel(key: String) -> String:
+	match _kind(key):
+		"world":
+			return "Worlds/%s.json" % _id(key)
+		"city":
+			return "Cities/%s.json" % _id(key)
+		"phen":
+			return "Worlds/%s.phenomena.json" % _id(key)
+	return "Localization/%s.yaml" % _id(key)
+
+
+## 导出选定内容为一个 .ffw 内容包（单文件 = zip，内部目录与数据根同构）：
+## 气候表、城市设置、引用的世界（+现象模板）、参考图、以及**只含相关键**的语言文件
+## （键级合并的补丁语义：包只带走“这座城市的表达文本”，不背全量翻译）。
+func _on_city_export_ffw(path: String) -> void:
+	var id := current_city_id
+	if id.is_empty():
+		return
+	if not path.to_lower().ends_with(".ffw"):
+		path += ".ffw"
+	# 导出前保持磁盘状态与编辑器一致（城市 + zh 名）
+	_ensure_loc_group("cities")[id] = name_edit.text
+	if not _save_key("city:" + id):
+		return
+	_save_zh_names_if_dirty()
+	var wid := str(current_city.get("world", ""))
+	var phen_ids := PackedStringArray()
+	var phen := SettingsStore.load_phenomena(wid) if wid != "" else {}
+	if typeof(phen.get("phenomena", null)) == TYPE_ARRAY:
+		for e in phen["phenomena"]:
+			phen_ids.append(str(e.get("id", "")))
+	var files := {}  # 内部相对路径 -> PackedByteArray
+	var csv := SettingsStore.climate_dir().path_join(id + ".csv")
+	if FileAccess.file_exists(csv):
+		files["Climate/%s.csv" % id] = _read_bytes(csv)
+	files["Cities/%s.json" % id] = _read_bytes(SettingsStore.cities_dir().path_join(id + ".json"))
+	if wid != "" and world_ids.has(wid):
+		files["Worlds/%s.json" % wid] = _read_bytes(SettingsStore.worlds_dir().path_join(wid + ".json"))
+		var phen_p := SettingsStore.phenomena_path(wid)
+		if FileAccess.file_exists(phen_p):
+			files["Worlds/%s.phenomena.json" % wid] = _read_bytes(phen_p)
+		var map_dir := SettingsStore.maps_dir().path_join(wid)
+		var msrc := DirAccess.open(SettingsStore.os_path(map_dir))
+		if msrc != null:
+			for f in msrc.get_files():
+				files["Maps/%s/%s" % [wid, f]] = _read_bytes(map_dir.path_join(str(f)))
+	# 语言文件：每个语言只带与本次导出内容相关的键（cities/worlds/phenomena 组）
+	var langs := SettingsStore.list_languages()
+	for lang in langs:
+		var merged := SettingsStore.load_language_merged(lang)
+		var out := {}
+		for pair in [["cities", id], ["worlds", wid], ["phenomena", ""]]:
+			var group: String = pair[0]
+			var keys := PackedStringArray([pair[1]]) if pair[1] != "" else phen_ids
+			var entries: Dictionary = merged.get(group, {})
+			var sub := {}
+			for k in keys:
+				if entries.has(str(k)):
+					sub[str(k)] = entries[str(k)]
+			if not sub.is_empty():
+				out[group] = sub
+		if not out.is_empty():
+			files["Localization/%s.yaml" % lang] = MiniYaml.dumps(out).to_utf8_buffer()
+	if _write_ffw(path, files):
+		_set_status(UiText.f("内容包已导出：%s（%d 个文件；放进 data/ffmods/ 即生效，文件名靠后的包优先）", [
+			path, files.size()]))
+
+
+static func _read_bytes(path: String) -> PackedByteArray:
+	var f := FileAccess.open(path, FileAccess.READ)
+	return f.get_buffer(f.get_length()) if f != null else PackedByteArray()
+
+
+## 写 .ffw（zip；内部目录与数据根同构——手动解压进 data/ 也能用）。
+static func _write_ffw(path: String, files: Dictionary) -> bool:
+	var zp := ZIPPacker.new()
+	if zp.open(path) != OK:
+		return false
+	var names := files.keys()
+	names.sort()
+	for rel in names:
+		zp.start_file(str(rel))
+		zp.write_file(files[rel])
+		zp.close_file()
+	zp.close()
+	return true
+
+
+## 导入内容包：拷进 data/ffmods/（文件名决定优先级），重新加载后生效。
+func _on_ffw_import(path: String) -> void:
+	DirAccess.make_dir_recursive_absolute(SettingsStore.os_path(FfwPacks.dir()))
+	var dst := FfwPacks.dir().path_join(path.get_file())
+	if DirAccess.copy_absolute(path, SettingsStore.os_path(dst)) != OK:
+		_set_status(UiText.f("内容包导入失败：%s", [path]))
+		return
+	FfwPacks.invalidate()
+	SettingsStore.invalidate_localization_cache()
+	_set_status(UiText.f("内容包已导入 → %s（覆盖优先级随文件名；主界面「重新加载气候数据」后生效）", [dst]))
 
 
 static func _copy_file(src: String, dst: String) -> bool:

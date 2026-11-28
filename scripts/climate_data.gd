@@ -46,13 +46,46 @@ static func load_from_file(path: String) -> ClimateData:
 	var f := FileAccess.open(path, FileAccess.READ)
 	if f == null:
 		return null
+	return load_from_text(f.get_as_text(), path.get_file().get_basename(), path)
+
+
+## 从文本解析（m3.13：.ffw 内容包里的气候表没有真实文件路径，走这里）。
+static func load_from_text(text: String, city: String, source := "") -> ClimateData:
 	var data := ClimateData.new()
-	data.source_path = path
-	data.city_name = path.get_file().get_basename()
-	while f.get_position() < f.get_length():
-		if not _parse_row(f.get_csv_line(), data):
+	data.source_path = source
+	data.city_name = city
+	for line in text.split("\n"):
+		if line.strip_edges().is_empty():
+			continue
+		if not _parse_row(f_csv_line(line), data):
 			data.skipped_rows += 1
 	return data
+
+
+## 单行 CSV 解析（带引号字段、内嵌逗号安全）——get_csv_line 的行内等价物。
+static func f_csv_line(line: String) -> PackedStringArray:
+	var cells := PackedStringArray()
+	var cur := ""
+	var in_quotes := false
+	var i := 0
+	var n := line.length()
+	# 引号字段内的换行：当前行若引号不闭合，续接下一物理行
+	while i < n:
+		var ch := line[i]
+		if ch == "\"":
+			if in_quotes and i + 1 < n and line[i + 1] == "\"":
+				cur += "\""
+				i += 1
+			else:
+				in_quotes = not in_quotes
+		elif ch == "," and not in_quotes:
+			cells.append(cur)
+			cur = ""
+		else:
+			cur += ch
+		i += 1
+	cells.append(cur)
+	return cells
 
 
 static func _parse_row(cells: PackedStringArray, data: ClimateData) -> bool:

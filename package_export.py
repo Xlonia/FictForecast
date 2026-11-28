@@ -60,6 +60,21 @@ Maps/           参考图（编辑器里"导入时复制到工程"的图落在�
 · data/ 放在只读位置会无法保存；可以把本目录拷去别处，启动时加参数 --data-dir=<路径>。
   也可以直接用 data/ 同级的 editor.bat 启动编辑器来改。
 """
+
+FFMODS_README = """data/ffmods/ —— 内容包目录（.ffw）
+==================================
+
+把 .ffw 内容包放进本文件夹即可生效（主界面「重新加载气候数据」后读取）。
+
+· .ffw 是 zip 格式，内部目录与 data/ 完全同构：
+    Climate/、Cities/、Worlds/、Localization/、Maps/
+  手动把包解开拷进 data/ 也能用，但保留 .ffw 原样更好管理（删包即卸载）。
+· 覆盖规则：Climate/ Worlds/ Cities/ Maps/ 里的文件 = 整文件覆盖（包优先）；
+  Localization/ = 按键合并（包只覆盖它带的键，其余沿用 data/ 原文）——
+  可以做一个只改某座城市译名的小补丁包。
+· 优先级：文件名升序，靠后的包优先（可用 10_xxx.ffw / 99_修复.ffw 控制顺序）。
+· 编辑器「导出 .ffw…」可以给选定城市生成这样的包；「导入 .ffw…」直接拷进本目录。
+"""
 DATA_EXTS = {".csv": "Climate", ".json": "Worlds"}
 
 
@@ -138,11 +153,14 @@ def append_data(tmp_dir):
                 arc = os.path.relpath(full, tmp_dir).replace("\\", "/")
                 z.write(full, arc)
                 added += 1
+        # 内容包目录（空文件夹 + 说明——批复口径：模板与空位随包分发）
+        z.writestr("data/ffmods/", "")
+        z.writestr("data/ffmods/README.txt", FFMODS_README)
         # 启动器（英文文件名、中文文案）与数据说明——批复口径
         z.writestr("editor.bat", BAT_EDITOR)
         z.writestr("play.bat", BAT_PLAY)
         z.writestr("data/README.txt", DATA_README)
-        added += 3
+        added += 5
     return added
 
 

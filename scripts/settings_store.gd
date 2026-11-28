@@ -169,10 +169,10 @@ static func fallback_chain(lang: String) -> Array[String]:
 
 
 ## 地名查找（城市/世界显示名）：沿回退链找第一个非空的值；全空返回 ""（调用方自行回退 id）。
+## 链上每级都读**生效**本地化（散文件 + 内容包键级合并）。
 static func _loc_lookup(group: String, key: String, lang: String) -> String:
 	for code in fallback_chain(lang):
-		var res := load_localization_file(loc_path(code))
-		var entries: Dictionary = res.data.get(group, {})
+		var entries: Dictionary = load_language_merged(code).get(group, {})
 		var v := str(entries.get(key, ""))
 		if not v.is_empty():
 			return v
@@ -248,13 +248,24 @@ static func ensure_defaults() -> void:
 
 
 static func list_city_ids() -> Array[String]:
+	var ids := _dir_csv_ids(climate_dir())
+	for p in FfwPacks.pack_paths():
+		for e in FfwPacks.entries(p):
+			if e.begins_with("Climate/") and e.ends_with(".csv"):
+				var id := e.get_file().get_basename()
+				if not ids.has(id):
+					ids.append(id)
+	ids.sort()
+	return ids
+
+
+static func _dir_csv_ids(dir_path: String) -> Array[String]:
 	var ids: Array[String] = []
-	var dir := DirAccess.open(climate_dir())
+	var dir := DirAccess.open(dir_path)
 	if dir != null:
 		for f in dir.get_files():
 			if f.get_extension().to_lower() == "csv":
 				ids.append(f.get_basename())
-	ids.sort()
 	return ids
 
 
@@ -265,11 +276,36 @@ static func list_world_ids() -> Array[String]:
 		for f in dir.get_files():
 			if f.get_extension().to_lower() == "json" and not f.ends_with(".phenomena.json"):
 				ids.append(f.get_basename())
+	for p in FfwPacks.pack_paths():
+		for e in FfwPacks.entries(p):
+			if e.begins_with("Worlds/") and e.ends_with(".json") and not e.ends_with(".phenomena.json"):
+				var id := e.get_file().get_basename()
+				if not ids.has(id):
+					ids.append(id)
 	ids.sort()
 	return ids
 
 
+## 读取某座城市的气候表：内容包优先（整文件覆盖），回落散文件；都没有返回 null。
+## source_path 用于状态栏展示（包来源显示为 “ffw:<包名>!Climate/<id>.csv”）。
+static func load_climate(id: String) -> ClimateData:
+	var rel := "Climate/%s.csv" % id
+	var pack := FfwPacks.winner_for(rel)
+	if pack != "":
+		return ClimateData.load_from_text(FfwPacks.read_text(pack, rel), id,
+				"ffw:%s!%s" % [pack.get_file(), rel])
+	var p := climate_dir().path_join(id + ".csv")
+	if FileAccess.file_exists(p):
+		return ClimateData.load_from_file(p)
+	return null
+
+
 static func load_world(id: String) -> Dictionary:
+	var t := FfwPacks.read_data_text("Worlds/%s.json" % id)
+	if t != "":
+		var parsed = JSON.parse_string(t)
+		if typeof(parsed) == TYPE_DICTIONARY:
+			return _complete_json(parsed, WORLD_DEFAULTS)
 	return _load_json(worlds_dir().path_join(id + ".json"), WORLD_DEFAULTS)
 
 
@@ -278,6 +314,12 @@ static func save_world(id: String, data: Dictionary) -> Error:
 
 
 static func load_city(id: String) -> Dictionary:
+	var rel := "Cities/%s.json" % id
+	var t := FfwPacks.read_data_text(rel)
+	if t != "":
+		var parsed = JSON.parse_string(t)
+		if typeof(parsed) == TYPE_DICTIONARY:
+			return _complete_json(parsed, CITY_DEFAULTS)  # 包来源视为新数据：走新默认（锚定图上位置）
 	var path := cities_dir().path_join(id + ".json")
 	var out := _load_json(path, CITY_DEFAULTS)
 	# 迁移：m3.8 之前的城市文件没有 anchor 字段——**旧文件**按“经纬度为准”理解（用户当年填的
@@ -338,6 +380,11 @@ static func phenomena_path(world_id: String) -> String:
 
 
 static func load_phenomena(world_id: String) -> Dictionary:
+	var t := FfwPacks.read_data_text("Worlds/%s.phenomena.json" % world_id)
+	if t != "":
+		var parsed = JSON.parse_string(t)
+		if typeof(parsed) == TYPE_DICTIONARY:
+			return _complete_json(parsed, PHENOMENA_DEFAULTS)
 	return _load_json(phenomena_path(world_id), PHENOMENA_DEFAULTS)
 
 
@@ -362,8 +409,24 @@ static func save_localization(data: Dictionary) -> Error:
 ## Localization/<语言代码>.yaml，一个文件一种语言。
 ## 有文本（.yaml）或有语言定义（.json）都算一种语言。
 static func list_languages() -> Array[String]:
+	var langs := _dir_lang_codes(loc_dir())
+	for p in FfwPacks.pack_paths():
+		for e in FfwPacks.entries(p):
+			if e.begins_with("Localization/"):
+				var ext := e.get_extension().to_lower()
+				if ext == "yaml" or ext == "json":
+					var code := e.get_file().get_basename()
+					if not langs.has(code):
+						langs.append(code)
+	langs.sort()
+	if langs.is_empty():
+		langs.append("zh")
+	return langs
+
+
+static func _dir_lang_codes(dir_path: String) -> Array[String]:
 	var langs: Array[String] = []
-	var dir := DirAccess.open(loc_dir())
+	var dir := DirAccess.open(dir_path)
 	if dir != null:
 		for f in dir.get_files():
 			var ext := f.get_extension().to_lower()
@@ -371,9 +434,6 @@ static func list_languages() -> Array[String]:
 				var code := f.get_basename()
 				if not langs.has(code):
 					langs.append(code)
-	langs.sort()
-	if langs.is_empty():
-		langs.append("zh")
 	return langs
 
 
@@ -405,6 +465,41 @@ static func save_localization_file(path: String, data: Dictionary) -> Error:
 
 static func invalidate_localization_cache() -> void:
 	_loc_cache.clear()
+	FfwPacks.invalidate()  # 内容包缓存一并失效（「重新加载」等场景）
+
+
+static var _ffw_loc := {}  # lang -> [签名, 合并后的字典]（键级覆盖缓存）
+
+
+## 界面语言缓存失效（由 FfwPacks.invalidate 调用）。
+static func invalidate_ffw_loc() -> void:
+	_ffw_loc.clear()
+
+
+## 某语言的**生效**本地化：data/ 散文件为基线，逐包把 ffw 的同路径文件按“组→键”合并覆盖。
+## 这是显示名与界面译文的唯一读取口径（内容包的“不同表达文本”补丁由此生效）。
+static func load_language_merged(lang: String) -> Dictionary:
+	var packs := FfwPacks.pack_paths()
+	var hit := {}
+	var sig := ""
+	for p in packs:
+		if FfwPacks.entries(p).has("Localization/%s.yaml" % lang):
+			hit[p] = true
+			sig += p + "@" + str(FfwPacks._mtime(p)) + ";"
+	if _ffw_loc.has(lang) and _ffw_loc[lang][0] == sig:
+		return _ffw_loc[lang][1]
+	var merged: Dictionary = load_localization_file(loc_path(lang)).data
+	for p in packs:
+		if not hit.has(p):
+			continue
+		var over: Dictionary = MiniYaml.parse(FfwPacks.read_text(p, "Localization/%s.yaml" % lang)).data
+		for group in over:
+			if not merged.has(group) or typeof(merged[group]) != TYPE_DICTIONARY:
+				merged[group] = {}
+			for key in over[group]:
+				merged[group][key] = over[group][key]
+	_ffw_loc[lang] = [sig, merged]
+	return merged
 
 
 # ———————— 语言定义（Localization/<语言代码>.json：名字 + 字体）———————
@@ -508,6 +603,14 @@ static func _load_json(path: String, defaults: Dictionary) -> Dictionary:
 	var parsed = JSON.parse_string(f.get_as_text())
 	if typeof(parsed) != TYPE_DICTIONARY:
 		return out
+	return _complete_json(parsed, defaults, out)
+
+
+## 解析结果 + 默认骨架 → 补全的可写字典（内容包来源的文件同样补全）。
+static func _complete_json(parsed: Dictionary, defaults: Dictionary, out := {}) -> Dictionary:
+	if out.is_empty():
+		for k in defaults:
+			out[k] = _writable(defaults[k])
 	for k in defaults:
 		if parsed.has(k) and _type_ok(parsed[k], defaults[k]):
 			out[k] = parsed[k]

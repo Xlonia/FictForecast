@@ -314,16 +314,12 @@ static func _weekday(year: int, month: int, day: int) -> int:
 
 func _reload_climates() -> void:
 	var kept := climate
-	SettingsStore.invalidate_localization_cache()  # 编辑器是独立进程，可能改过本地化文件
+	SettingsStore.invalidate_localization_cache()  # 编辑器是独立进程，可能改过本地化与内容包
 	climates.clear()
-	var dir := DirAccess.open(SettingsStore.climate_dir())
-	if dir != null:
-		for fname in dir.get_files():
-			if fname.get_extension().to_lower() != "csv":
-				continue
-			var cd := ClimateData.load_from_file(SettingsStore.climate_dir().path_join(fname))
-			if cd != null:
-				climates.append(cd)
+	for id in SettingsStore.list_city_ids():
+		var cd := SettingsStore.load_climate(id)  # 内容包优先（ffw 覆盖 / 包新增城市），回落散文件
+		if cd != null:
+			climates.append(cd)
 	climates.sort_custom(func(a, b): return a.city_name.naturalnocasecmp_to(b.city_name) < 0)
 	climate = null
 	for c in climates:

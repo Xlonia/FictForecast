@@ -227,6 +227,16 @@ tooltip_text = "把城市打包成可直接分享的文件夹：气候表、城�
 layout_mode = 2
 text = "导出城市…"
 
+[node name="FfwExportBtn" type="Button" parent="Root/Column/Tabs/CityTab/Top"]
+tooltip_text = "把选定内容打包为单个 .ffw 内容包（内部目录与 data/ 同构）：放进 data/ffmods/ 即生效——同键覆盖、按文件名定优先级，语言文件只带相关键（补丁语义）"
+layout_mode = 2
+text = "导出 .ffw…"
+
+[node name="FfwImportBtn" type="Button" parent="Root/Column/Tabs/CityTab/Top"]
+tooltip_text = "把 .ffw 内容包拷进 data/ffmods/（主界面「重新加载气候数据」后生效）"
+layout_mode = 2
+text = "导入 .ffw…"
+
 [node name="Scroll" type="ScrollContainer" parent="Root/Column/Tabs/CityTab"]
 layout_mode = 2
 size_flags_vertical = 3

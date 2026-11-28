@@ -409,7 +409,88 @@ func _init() -> void:
 	OS.set_environment("FF_DATA_DIR", "res://icon.svg/subdir")  # 路径穿过一个文件 → 写探针必败
 	_check(not SettingsStore.data_writable(), "不可写的数据根能被检出（m3.12 批复）")
 	OS.set_environment("FF_DATA_DIR", "")
+
+	# —— 20. m3.13 .ffw 内容包（覆盖优先级；批复示例：同一城市不同的表达文本）——
+	var test_root := "user://ff_selftest_data"
+	DirAccess.make_dir_recursive_absolute(test_root)
+	for old_pack in [test_root.path_join("ffmods/10_base.ffw"), test_root.path_join("ffmods/99_fix.ffw")]:
+		if FileAccess.file_exists(old_pack):  # 上次自检残留：先清（mtime 变了会自然失效，防上次中途失败）
+			DirAccess.remove_absolute(old_pack)
+	OS.set_environment("FF_DATA_DIR", test_root)
+	DirAccess.make_dir_recursive_absolute(SettingsStore.cities_dir())
+	DirAccess.make_dir_recursive_absolute(SettingsStore.climate_dir())
+	DirAccess.make_dir_recursive_absolute(SettingsStore.loc_dir())
+	var ffdir := FfwPacks.dir()
+	DirAccess.make_dir_recursive_absolute(SettingsStore.os_path(ffdir))
+	# 基线：本体带的城市 aleksandrowicz（散文件口径）
+	var csv := PackedStringArray()
+	csv.append("tmean,5,6,7,8,9,10,11,12,13,14,15,16")
+	csv.append("rmean,1,1,1,1,1,1,1,1,1,1,1,1")
+	csv.append("thigh,7,8,9,10,11,12,13,14,15,16,17,18")
+	csv.append("tlow,1,2,3,4,5,6,7,8,9,10,11,12")
+	csv.append("raint,2,2,2,2,2,2,2,2,2,2,2,2")
+	var csvw := FileAccess.open(SettingsStore.climate_dir().path_join("aleksandrowicz.csv"), FileAccess.WRITE)
+	csvw.store_string("\n".join(csv))
+	csvw.close()
+	SettingsStore._save_json(SettingsStore.cities_dir().path_join("aleksandrowicz.json"),
+			{"world": "provia", "anchor": "latlong"})
+	SettingsStore._save_json(SettingsStore.worlds_dir().path_join("provia.json"), {"seed": "base-seed"})
+	SettingsStore.save_localization_file(SettingsStore.loc_path("zh"),
+			{"cities": {"aleksandrowicz": "Aleks"}, "worlds": {"provia": "普罗维亚"}})
+	# 包 1（10_base.ffw）：同一城市的**另一种表达文本** + 新世界 + 包新增城市
+	var p1 := ffdir.path_join("10_base.ffw")
+	_check(_mk_ffw(p1, {
+		"Localization/zh.yaml": "cities:\n  aleksandrowicz: 亚历山德罗维奇\n",
+		"Worlds/provia.json": JSON.stringify({"seed": "from-pack-1"}),
+		"Cities/newcity.json": JSON.stringify({"world": "provia"}),
+		"Climate/newcity.csv": "\n".join(csv),
+	}), "内容包 1 写盘")
+	# 包 2（99_fix.ffw）：更高优先级，覆盖同一个世界文件
+	var p2 := ffdir.path_join("99_fix.ffw")
+	_check(_mk_ffw(p2, {"Worlds/provia.json": JSON.stringify({"seed": "from-pack-2"})}), "内容包 2 写盘")
+	SettingsStore.invalidate_localization_cache()
+	_check(FfwPacks.winner_for("Worlds/provia.json").ends_with("99_fix.ffw"),
+			"文件名靠后的包优先（%s）" % FfwPacks.winner_for("Worlds/provia.json").get_file())
+	_check(str(SettingsStore.load_world("provia").get("seed", "")) == "from-pack-2",
+			"世界文件整文件覆盖：读包 2（实际 %s）" % str(SettingsStore.load_world("provia").get("seed", "")))
+	_check(SettingsStore.city_display_name("aleksandrowicz") == "亚历山德罗维奇",
+			"批复示例：包里的城市表达文本覆盖原文（实际 %s）" % SettingsStore.city_display_name("aleksandrowicz"))
+	_check(SettingsStore.world_display_name("provia") == "普罗维亚",
+			"键级合并：包没带的键保留基线（实际 %s）" % SettingsStore.world_display_name("provia"))
+	_check(SettingsStore.list_world_ids().has("provia") and SettingsStore.list_city_ids().has("newcity"),
+			"清单并集：包新增的城市/世界被列出")
+	_check(SettingsStore.load_climate("newcity") != null
+			and SettingsStore.load_climate("newcity").city_name == "newcity",
+			"包新增城市的气候表可读（ClimateData.load_from_text）")
+	_check(SettingsStore.load_climate("aleksandrowicz") != null
+			and SettingsStore.load_climate("aleksandrowicz").month_value("rain_days", 3) == 2.0,
+			"基线城市的气候表仍可读（包未覆盖 → 散文件）")
+	_check(SettingsStore.list_languages().has("zh"), "语言清单在内容包环境下正常")
+	OS.set_environment("FF_DATA_DIR", "")
+	FfwPacks.invalidate()
+	# 临时数据根清理（best-effort：文件逐个删，目录留待系统/下次覆盖）
+	for rf in ["aleksandrowicz.csv", "newcity.csv"]:
+		DirAccess.remove_absolute(test_root.path_join("Climate/" + rf))
+	for rf in ["aleksandrowicz.json", "newcity.json"]:
+		DirAccess.remove_absolute(test_root.path_join("Cities/" + rf))
+	DirAccess.remove_absolute(test_root.path_join("Worlds/provia.json"))
+	DirAccess.remove_absolute(test_root.path_join("Localization/zh.yaml"))
+	DirAccess.remove_absolute(test_root.path_join("ffmods/10_base.ffw"))
+	DirAccess.remove_absolute(test_root.path_join("ffmods/99_fix.ffw"))
 	_finish()
+
+
+## 自检用：写一个最小 .ffw（zip；user:// 与真实路径都先转 OS 路径）。
+static func _mk_ffw(path: String, files: Dictionary) -> bool:
+	var zp := ZIPPacker.new()
+	if zp.open(SettingsStore.os_path(path)) != OK:
+		return false
+	for rel in files:
+		zp.start_file(str(rel))
+		zp.write_file(str(files[rel]).to_utf8_buffer())
+		zp.close_file()
+	zp.close()
+	return true
 
 
 func _check_day(cd: ClimateData, date: Dictionary, rep: Dictionary) -> void:

@@ -321,3 +321,14 @@ ui:
   ＋ 添加壁纸系列: + Add wallpaper set
   ＋ 添加气象效果: + Add weather effect
   ⚠ 数据目录不可写：%s（改动无法保存）——请把数据移到可写位置，或用 --data-dir=<路径> 指定: ⚠ Data directory is not writable: %s (changes cannot be saved) — move the data to a writable location or pass --data-dir=<path>
+  导出 .ffw…: Export .ffw…
+  导入 .ffw…: Import .ffw…
+  *.ffw ; 内容包 (.ffw): *.ffw ; Content packs (.ffw)
+  导出内容包 (.ffw): Export content pack (.ffw)
+  导入内容包 (.ffw): Import content pack (.ffw)
+  内容包已导出：%s（%d 个文件；放进 data/ffmods/ 即生效，文件名靠后的包优先）: Content pack exported: %s (%d files; drop it into data/ffmods/ to activate; later filenames win)
+  内容包已导入 → %s（覆盖优先级随文件名；主界面「重新加载气候数据」后生效）: Content pack imported → %s (priority follows the filename; takes effect after “Reload climate data”)
+  已保存到 data/，但内容包 %s 覆盖了同一文件（读取以包为准）: Saved to data/, but content pack %s overrides the same file (reads come from the pack)
+  内容包导入失败：%s: Failed to import the content pack: %s
+  把 .ffw 内容包拷进 data/ffmods/（主界面「重新加载气候数据」后生效）: Copy the .ffw content pack into data/ffmods/ (takes effect after “Reload climate data”)
+  把选定内容打包为单个 .ffw 内容包（内部目录与 data/ 同构）：放进 data/ffmods/ 即生效——同键覆盖、按文件名定优先级，语言文件只带相关键（补丁语义）: Bundle the selected content into a single .ffw pack (layout mirrors data/): drop it into data/ffmods/ to activate — same-key overrides, priority by filename, language files carry only the relevant keys (patch semantics)
